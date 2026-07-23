@@ -1,0 +1,2 @@
+-- Permissions are inserted by 002_create_iam_tables.sql so first deployments are functional
+-- with a single `npm run migrate`.

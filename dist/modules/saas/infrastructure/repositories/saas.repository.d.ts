@@ -1,0 +1,226 @@
+export declare class SaasRepository {
+    getPlatformDashboard(): Promise<{
+        totalTenants: number;
+        activeSubscriptions: number;
+        activePlans: number;
+        estimatedMonthlyRevenueCents: number;
+        estimatedAnnualRevenueCents: number;
+        totalEvents: number;
+        totalUsers: number;
+        planDistribution: {
+            planId: string;
+            planName: string;
+            subscriptionsCount: number;
+        }[];
+        recentSubscriptions: {
+            id: string;
+            tenantId: string;
+            tenantName: string | undefined;
+            tenantSlug: string | undefined;
+            planId: string;
+            status: string;
+            startsAt: Date;
+            endsAt: Date | null;
+            planName: string;
+            planPriceCents: number | undefined;
+            planCurrency: string | undefined;
+            ownerEmail: string | null | undefined;
+            ownerName: string | null | undefined;
+            eventName: string | null;
+            eventLogoFileId: string | null;
+            eventsCount: number;
+            usersCount: number;
+            limits: {
+                maxEvents: number;
+                maxUsers: number;
+                maxStorageMb: number;
+                maxOrganizations: number;
+            };
+        }[];
+    }>;
+    listPublicPlans(): Promise<{
+        id: string;
+        code: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        currency: string;
+        billingInterval: string;
+        maxEvents: number;
+        maxUsers: number;
+        maxStorageMb: number;
+        features: Record<string, unknown>;
+        isActive: boolean;
+        sortOrder: number;
+    }[]>;
+    listPlans(): Promise<{
+        id: string;
+        code: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        currency: string;
+        billingInterval: string;
+        maxEvents: number;
+        maxUsers: number;
+        maxStorageMb: number;
+        features: Record<string, unknown>;
+        isActive: boolean;
+        sortOrder: number;
+    }[]>;
+    findPlanById(id: string): Promise<{
+        id: string;
+        code: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        currency: string;
+        billingInterval: string;
+        maxEvents: number;
+        maxUsers: number;
+        maxStorageMb: number;
+        features: Record<string, unknown>;
+        isActive: boolean;
+        sortOrder: number;
+    } | null>;
+    createPlan(input: {
+        code: string;
+        name: string;
+        description?: string | null;
+        priceCents: number;
+        currency: string;
+        billingInterval: string;
+        maxEvents: number;
+        maxUsers: number;
+        maxStorageMb: number;
+        features: Record<string, unknown>;
+        isActive: boolean;
+        sortOrder: number;
+    }): Promise<{
+        id: string;
+        code: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        currency: string;
+        billingInterval: string;
+        maxEvents: number;
+        maxUsers: number;
+        maxStorageMb: number;
+        features: Record<string, unknown>;
+        isActive: boolean;
+        sortOrder: number;
+    }>;
+    updatePlan(id: string, input: Partial<{
+        code: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        currency: string;
+        billingInterval: string;
+        maxEvents: number;
+        maxUsers: number;
+        maxStorageMb: number;
+        features: Record<string, unknown>;
+        isActive: boolean;
+        sortOrder: number;
+    }>): Promise<{
+        id: string;
+        code: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        currency: string;
+        billingInterval: string;
+        maxEvents: number;
+        maxUsers: number;
+        maxStorageMb: number;
+        features: Record<string, unknown>;
+        isActive: boolean;
+        sortOrder: number;
+    } | null>;
+    createSubscription(input: {
+        tenantId: string;
+        planId: string;
+        createdBy: string;
+    }): Promise<string>;
+    hasActiveSubscriptionForTenant(tenantId: string): Promise<boolean>;
+    getMaxOrganizationsForUser(userId: string): Promise<number>;
+    listSubscriptionsForUser(userId: string): Promise<{
+        id: string;
+        tenantId: string;
+        tenantName: string | undefined;
+        tenantSlug: string | undefined;
+        planId: string;
+        status: string;
+        startsAt: Date;
+        endsAt: Date | null;
+        planName: string;
+        planPriceCents: number | undefined;
+        planCurrency: string | undefined;
+        ownerEmail: string | null | undefined;
+        ownerName: string | null | undefined;
+        eventName: string | null;
+        eventLogoFileId: string | null;
+        eventsCount: number;
+        usersCount: number;
+        limits: {
+            maxEvents: number;
+            maxUsers: number;
+            maxStorageMb: number;
+            maxOrganizations: number;
+        };
+    }[]>;
+    findActiveSubscriptionByTenant(tenantId: string): Promise<{
+        id: string;
+        tenantId: string;
+        tenantName: string | undefined;
+        tenantSlug: string | undefined;
+        planId: string;
+        status: string;
+        startsAt: Date;
+        endsAt: Date | null;
+        planName: string;
+        planPriceCents: number | undefined;
+        planCurrency: string | undefined;
+        ownerEmail: string | null | undefined;
+        ownerName: string | null | undefined;
+        eventName: string | null;
+        eventLogoFileId: string | null;
+        eventsCount: number;
+        usersCount: number;
+        limits: {
+            maxEvents: number;
+            maxUsers: number;
+            maxStorageMb: number;
+            maxOrganizations: number;
+        };
+    } | null>;
+    listSubscriptions(limit?: number, options?: {
+        activeOnly?: boolean;
+    }): Promise<{
+        id: string;
+        tenantId: string;
+        tenantName: string | undefined;
+        tenantSlug: string | undefined;
+        planId: string;
+        status: string;
+        startsAt: Date;
+        endsAt: Date | null;
+        planName: string;
+        planPriceCents: number | undefined;
+        planCurrency: string | undefined;
+        ownerEmail: string | null | undefined;
+        ownerName: string | null | undefined;
+        eventName: string | null;
+        eventLogoFileId: string | null;
+        eventsCount: number;
+        usersCount: number;
+        limits: {
+            maxEvents: number;
+            maxUsers: number;
+            maxStorageMb: number;
+            maxOrganizations: number;
+        };
+    }[]>;
+}

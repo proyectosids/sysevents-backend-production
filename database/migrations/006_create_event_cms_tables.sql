@@ -1,0 +1,106 @@
+IF OBJECT_ID('dbo.event_pages', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.event_pages (
+    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    event_id UNIQUEIDENTIFIER NOT NULL,
+    title NVARCHAR(180) NOT NULL,
+    slug NVARCHAR(120) NOT NULL,
+    status NVARCHAR(30) NOT NULL DEFAULT 'draft',
+    seo_title NVARCHAR(180) NULL,
+    seo_description NVARCHAR(255) NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    published_at DATETIME2 NULL,
+    deleted_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_event_pages_event FOREIGN KEY (event_id) REFERENCES dbo.events(id) ON DELETE CASCADE,
+    CONSTRAINT uq_event_pages_slug UNIQUE (event_id, slug)
+  );
+END;
+
+IF OBJECT_ID('dbo.event_page_sections', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.event_page_sections (
+    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    event_id UNIQUEIDENTIFIER NOT NULL,
+    page_id UNIQUEIDENTIFIER NULL,
+    section_type NVARCHAR(80) NOT NULL,
+    title NVARCHAR(180) NULL,
+    content_json NVARCHAR(MAX) NOT NULL DEFAULT '{}',
+    status NVARCHAR(30) NOT NULL DEFAULT 'draft',
+    sort_order INT NOT NULL DEFAULT 0,
+    deleted_at DATETIME2 NULL,
+    created_by UNIQUEIDENTIFIER NULL,
+    updated_by UNIQUEIDENTIFIER NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_event_page_sections_event FOREIGN KEY (event_id) REFERENCES dbo.events(id) ON DELETE CASCADE,
+    CONSTRAINT fk_event_page_sections_page FOREIGN KEY (page_id) REFERENCES dbo.event_pages(id)
+  );
+END;
+
+IF OBJECT_ID('dbo.event_menu_items', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.event_menu_items (
+    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    event_id UNIQUEIDENTIFIER NOT NULL,
+    label NVARCHAR(100) NOT NULL,
+    url NVARCHAR(255) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_visible BIT NOT NULL DEFAULT 1,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_event_menu_items_event FOREIGN KEY (event_id) REFERENCES dbo.events(id) ON DELETE CASCADE
+  );
+END;
+
+IF OBJECT_ID('dbo.speakers', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.speakers (
+    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    event_id UNIQUEIDENTIFIER NOT NULL,
+    full_name NVARCHAR(180) NOT NULL,
+    bio NVARCHAR(MAX) NULL,
+    affiliation NVARCHAR(180) NULL,
+    photo_url NVARCHAR(500) NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_visible BIT NOT NULL DEFAULT 1,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_speakers_event FOREIGN KEY (event_id) REFERENCES dbo.events(id) ON DELETE CASCADE
+  );
+END;
+
+IF OBJECT_ID('dbo.sponsors', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.sponsors (
+    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    event_id UNIQUEIDENTIFIER NOT NULL,
+    name NVARCHAR(180) NOT NULL,
+    website_url NVARCHAR(500) NULL,
+    logo_url NVARCHAR(500) NULL,
+    tier NVARCHAR(80) NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_visible BIT NOT NULL DEFAULT 1,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_sponsors_event FOREIGN KEY (event_id) REFERENCES dbo.events(id) ON DELETE CASCADE
+  );
+END;
+
+IF OBJECT_ID('dbo.faqs', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.faqs (
+    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    event_id UNIQUEIDENTIFIER NOT NULL,
+    question NVARCHAR(255) NOT NULL,
+    answer NVARCHAR(MAX) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_visible BIT NOT NULL DEFAULT 1,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_faqs_event FOREIGN KEY (event_id) REFERENCES dbo.events(id) ON DELETE CASCADE
+  );
+END;

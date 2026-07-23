@@ -1,0 +1,27 @@
+export type SubmissionStatus = 'draft' | 'submitted' | 'under_review' | 'changes_requested' | 'resubmitted' | 'accepted' | 'rejected' | 'cancelled';
+export type Submission = {
+    id: string;
+    eventId: string;
+    submissionTypeId: string;
+    programId: string | null;
+    knowledgeAreaId: string | null;
+    knowledgeLineId: string | null;
+    registrationId: string | null;
+    ownerUserId: string;
+    submissionTypeName?: string | null;
+    programName?: string | null;
+    knowledgeAreaName?: string | null;
+    knowledgeLineName?: string | null;
+    latestDecisionNotes?: string | null;
+    title: string;
+    abstract: string | null;
+    videoUrl: string | null;
+    keywords: string | null;
+    status: SubmissionStatus;
+    submittedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    latestDecision?: string | null;
+    primaryAuthorName?: string | null;
+    primaryAuthorEmail?: string | null;
+};
