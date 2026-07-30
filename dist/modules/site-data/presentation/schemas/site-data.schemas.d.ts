@@ -13,9 +13,9 @@ export declare const programSchema: z.ZodObject<{
     isActive: z.ZodOptional<z.ZodBoolean>;
     sortOrder: z.ZodOptional<z.ZodNumber>;
     fullSubmissionType: z.ZodOptional<z.ZodEnum<{
+        file: "file";
         video_url: "video_url";
         none: "none";
-        file: "file";
     }>>;
     settings: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, z.core.$strip>;
@@ -176,9 +176,9 @@ export declare const updateProgramSchema: z.ZodObject<{
     isActive: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
     sortOrder: z.ZodOptional<z.ZodOptional<z.ZodNumber>>;
     fullSubmissionType: z.ZodOptional<z.ZodOptional<z.ZodEnum<{
+        file: "file";
         video_url: "video_url";
         none: "none";
-        file: "file";
     }>>>;
     settings: z.ZodOptional<z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
 }, z.core.$strip>;

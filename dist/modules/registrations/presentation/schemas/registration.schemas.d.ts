@@ -152,8 +152,8 @@ export declare const createRegistrationFormFieldSchema: z.ZodObject<{
     fieldType: z.ZodEnum<{
         number: "number";
         email: "email";
-        file: "file";
         date: "date";
+        file: "file";
         phone: "phone";
         text: "text";
         textarea: "textarea";
@@ -178,8 +178,8 @@ export declare const updateRegistrationFormFieldSchema: z.ZodObject<{
     fieldType: z.ZodOptional<z.ZodEnum<{
         number: "number";
         email: "email";
-        file: "file";
         date: "date";
+        file: "file";
         phone: "phone";
         text: "text";
         textarea: "textarea";

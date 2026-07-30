@@ -13,7 +13,7 @@ export declare const createEventSchema: z.ZodObject<{
     startsAt: z.ZodOptional<z.ZodCoercedDate<unknown>>;
     endsAt: z.ZodOptional<z.ZodCoercedDate<unknown>>;
     mainModality: z.ZodOptional<z.ZodString>;
-    templateEventId: z.ZodOptional<z.ZodString>;
+    templateEventId: z.ZodPreprocess<z.ZodOptional<z.ZodString>>;
 }, z.core.$strip>;
 export declare const updateEventSchema: z.ZodObject<{
     name: z.ZodOptional<z.ZodString>;
