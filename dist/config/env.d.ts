@@ -1,6 +1,6 @@
 export declare const env: {
     APP_NAME: string;
-    NODE_ENV: "development" | "test" | "production";
+    NODE_ENV: "production" | "development" | "test";
     SERVER_HOST: string;
     PORT: number;
     CORS_ORIGIN: string;
