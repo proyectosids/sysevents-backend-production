@@ -5,8 +5,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.env = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
 const zod_1 = require("zod");
-dotenv_1.default.config();
+const envPath = path_1.default.resolve(__dirname, '../../.env');
+const dotenvResult = dotenv_1.default.config({
+    path: envPath,
+});
+if (dotenvResult.error) {
+    console.error('Error cargando .env:', dotenvResult.error);
+    process.exit(1);
+}
 const envSchema = zod_1.z.object({
     APP_NAME: zod_1.z.string().default('SysEvents API'),
     NODE_ENV: zod_1.z
@@ -16,7 +24,7 @@ const envSchema = zod_1.z.object({
     PORT: zod_1.z.coerce.number().int().min(1).max(65535).default(3000),
     CORS_ORIGIN: zod_1.z.string().default('http://localhost:5173'),
     APP_PUBLIC_URL: zod_1.z.string().url().default('http://localhost:5173'),
-    APP_API_URL: zod_1.z.string().url().default('http://localhost:3000'),
+    APP_API_URL: zod_1.z.string().url().default('http://localhost:5003'),
     JWT_SECRET: zod_1.z.string().min(10),
     JWT_EXPIRES_IN: zod_1.z.string().default('1d'),
     JWT_REFRESH_EXPIRES_IN: zod_1.z.string().default('7d'),

@@ -37,6 +37,9 @@ const api_response_1 = require("./shared/utils/api-response");
 const corsOrigins = env_1.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
 function createApp() {
     const app = (0, express_1.default)();
+    // CapRover forwards requests through a single reverse proxy. Trust that hop so
+    // Express and express-rate-limit use the original client IP from X-Forwarded-For.
+    app.set('trust proxy', 1);
     app.use((0, cors_1.default)({
         origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0],
         credentials: true,
