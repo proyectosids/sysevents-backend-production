@@ -21,7 +21,7 @@ function isProtectedValue(value) {
         return true;
     if (/\b(?:folio|orden|order)\s+[A-Z0-9-]{4,}\b/i.test(text))
         return true;
-    if (/\b[A-Z0-9]{6,}\b/.test(text))
+    if (/^[A-Z0-9-]{6,}$/.test(text))
         return true;
     if (/^\+?\d[\d\s().-]{6,}$/.test(text))
         return true;
