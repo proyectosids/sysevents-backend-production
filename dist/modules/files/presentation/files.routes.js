@@ -207,6 +207,13 @@ exports.publicFilesRouter.get('/:id/download', (0, async_handler_1.asyncHandler)
             .type('image/webp')
             .send(logo);
     }
+    if (isImage && req.query.variant === 'speaker-photo') {
+        const photo = await storageService.createSpeakerPhotoVariant(file.storagePath);
+        return res
+            .set('Cache-Control', 'public, max-age=31536000, immutable')
+            .type('image/webp')
+            .send(photo);
+    }
     return res.sendFile(storageService.getAbsolutePath(file.storagePath), (error) => {
         if (!error)
             return;

@@ -15,6 +15,7 @@ export declare class FileStorageService {
     private prepareFile;
     getAbsolutePath(storagePath: string): string;
     createSponsorLogoVariant(storagePath: string): Promise<Buffer<ArrayBufferLike>>;
+    createSpeakerPhotoVariant(storagePath: string): Promise<Buffer<ArrayBufferLike>>;
     remove(storagePath: string): Promise<void>;
 }
 export declare function buildGeneratedFileName(date: Date, id: string, extension: string): string;
