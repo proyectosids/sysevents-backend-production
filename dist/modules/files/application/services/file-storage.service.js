@@ -104,9 +104,7 @@ class FileStorageService {
             const input = await promises_1.default.readFile(absolutePath);
             const source = (0, sharp_1.default)(input, { failOn: 'error' }).rotate();
             const metadata = await source.metadata();
-            const photo = metadata.hasAlpha
-                ? source.trim({ background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: 2 })
-                : source;
+            const photo = source.trim({ threshold: 40 });
             return metadata.hasAlpha
                 ? await photo.webp({ lossless: true, effort: 6 }).toBuffer()
                 : await photo.webp({ quality: 92, smartSubsample: true, effort: 6 }).toBuffer();
