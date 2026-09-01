@@ -86,6 +86,7 @@ export declare const speakerSchema: z.ZodObject<{
     organization: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     websiteUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     socialUrl: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    isFeatured: z.ZodOptional<z.ZodBoolean>;
     status: z.ZodOptional<z.ZodEnum<{
         draft: "draft";
         published: "published";
@@ -216,6 +217,7 @@ export declare const updateSpeakerSchema: z.ZodObject<{
     organization: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     websiteUrl: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     socialUrl: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
+    isFeatured: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
     status: z.ZodOptional<z.ZodOptional<z.ZodEnum<{
         draft: "draft";
         published: "published";

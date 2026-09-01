@@ -83,6 +83,7 @@ function mapSpeaker(row) {
         websiteUrl: row.website_url,
         socialUrl: row.social_url,
         professionalExperience: parseJson(row.professional_experience_json ?? '[]'),
+        isFeatured: Boolean(row.is_featured),
         status: row.status,
         sortOrder: row.sort_order,
     };
@@ -556,6 +557,7 @@ class SiteDataRepository {
           AND speaker.deleted_at IS NULL
           AND (@onlyPublished = 0 OR speaker.status = 'published')
         ORDER BY
+          speaker.is_featured DESC,
           CASE WHEN speaker.source_registration_id IS NULL THEN 0 ELSE 1 END ASC,
           speaker.sort_order ASC,
           speaker.created_at ASC
@@ -610,56 +612,71 @@ class SiteDataRepository {
     }
     async createSpeaker(eventId, input, userId) {
         const pool = await (0, database_1.getSqlPool)();
-        const result = await pool.request()
-            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
-            .input('name', mssql_1.default.NVarChar(180), input.name)
-            .input('role', mssql_1.default.NVarChar(180), input.role ?? null)
-            .input('bio', mssql_1.default.NVarChar(mssql_1.default.MAX), input.bio ?? null)
-            .input('imageFileId', mssql_1.default.UniqueIdentifier, input.imageFileId ?? null)
-            .input('email', mssql_1.default.NVarChar(180), input.email ?? null)
-            .input('phone', mssql_1.default.NVarChar(80), input.phone ?? null)
-            .input('organization', mssql_1.default.NVarChar(180), input.organization ?? null)
-            .input('websiteUrl', mssql_1.default.NVarChar(500), input.websiteUrl ?? null)
-            .input('socialUrl', mssql_1.default.NVarChar(500), input.socialUrl ?? null)
-            .input('status', mssql_1.default.NVarChar(30), input.status ?? 'published')
-            .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? 0)
-            .input('userId', mssql_1.default.UniqueIdentifier, userId ?? null)
-            .query(`
-        INSERT INTO dbo.event_speakers (event_id, name, role, bio, image_file_id, email, phone, organization, website_url, social_url, status, sort_order, created_by, updated_by)
+        if (input.isFeatured === true) {
+            await this.assertFeaturedSpeakerAvailable(pool, eventId);
+        }
+        try {
+            const result = await pool.request()
+                .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+                .input('name', mssql_1.default.NVarChar(180), input.name)
+                .input('role', mssql_1.default.NVarChar(180), input.role ?? null)
+                .input('bio', mssql_1.default.NVarChar(mssql_1.default.MAX), input.bio ?? null)
+                .input('imageFileId', mssql_1.default.UniqueIdentifier, input.imageFileId ?? null)
+                .input('email', mssql_1.default.NVarChar(180), input.email ?? null)
+                .input('phone', mssql_1.default.NVarChar(80), input.phone ?? null)
+                .input('organization', mssql_1.default.NVarChar(180), input.organization ?? null)
+                .input('websiteUrl', mssql_1.default.NVarChar(500), input.websiteUrl ?? null)
+                .input('socialUrl', mssql_1.default.NVarChar(500), input.socialUrl ?? null)
+                .input('isFeatured', mssql_1.default.Bit, input.isFeatured === true ? 1 : 0)
+                .input('status', mssql_1.default.NVarChar(30), input.status ?? 'published')
+                .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? 0)
+                .input('userId', mssql_1.default.UniqueIdentifier, userId ?? null)
+                .query(`
+        INSERT INTO dbo.event_speakers (event_id, name, role, bio, image_file_id, email, phone, organization, website_url, social_url, is_featured, status, sort_order, created_by, updated_by)
         OUTPUT INSERTED.*
-        VALUES (@eventId, @name, @role, @bio, @imageFileId, @email, @phone, @organization, @websiteUrl, @socialUrl, @status, @sortOrder, @userId, @userId)
+        VALUES (@eventId, @name, @role, @bio, @imageFileId, @email, @phone, @organization, @websiteUrl, @socialUrl, @isFeatured, @status, @sortOrder, @userId, @userId)
       `);
-        return mapSpeaker(result.recordset[0]);
+            return mapSpeaker(result.recordset[0]);
+        }
+        catch (error) {
+            this.rethrowFeaturedSpeakerConflict(error);
+        }
     }
     async updateSpeaker(eventId, id, input, userId) {
         const pool = await (0, database_1.getSqlPool)();
-        const result = await pool.request()
-            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
-            .input('id', mssql_1.default.UniqueIdentifier, id)
-            .input('name', mssql_1.default.NVarChar(180), input.name ?? null)
-            .input('nameProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'name'))
-            .input('role', mssql_1.default.NVarChar(180), input.role ?? null)
-            .input('roleProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'role'))
-            .input('bio', mssql_1.default.NVarChar(mssql_1.default.MAX), input.bio ?? null)
-            .input('bioProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'bio'))
-            .input('imageFileId', mssql_1.default.UniqueIdentifier, input.imageFileId ?? null)
-            .input('imageFileIdProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'imageFileId'))
-            .input('email', mssql_1.default.NVarChar(180), input.email ?? null)
-            .input('emailProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'email'))
-            .input('phone', mssql_1.default.NVarChar(80), input.phone ?? null)
-            .input('phoneProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'phone'))
-            .input('organization', mssql_1.default.NVarChar(180), input.organization ?? null)
-            .input('organizationProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'organization'))
-            .input('websiteUrl', mssql_1.default.NVarChar(500), input.websiteUrl ?? null)
-            .input('websiteUrlProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'websiteUrl'))
-            .input('socialUrl', mssql_1.default.NVarChar(500), input.socialUrl ?? null)
-            .input('socialUrlProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'socialUrl'))
-            .input('status', mssql_1.default.NVarChar(30), input.status ?? null)
-            .input('statusProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'status'))
-            .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? null)
-            .input('sortOrderProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'sortOrder'))
-            .input('userId', mssql_1.default.UniqueIdentifier, userId ?? null)
-            .query(`
+        if (input.isFeatured === true) {
+            await this.assertFeaturedSpeakerAvailable(pool, eventId, id);
+        }
+        try {
+            const result = await pool.request()
+                .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+                .input('id', mssql_1.default.UniqueIdentifier, id)
+                .input('name', mssql_1.default.NVarChar(180), input.name ?? null)
+                .input('nameProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'name'))
+                .input('role', mssql_1.default.NVarChar(180), input.role ?? null)
+                .input('roleProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'role'))
+                .input('bio', mssql_1.default.NVarChar(mssql_1.default.MAX), input.bio ?? null)
+                .input('bioProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'bio'))
+                .input('imageFileId', mssql_1.default.UniqueIdentifier, input.imageFileId ?? null)
+                .input('imageFileIdProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'imageFileId'))
+                .input('email', mssql_1.default.NVarChar(180), input.email ?? null)
+                .input('emailProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'email'))
+                .input('phone', mssql_1.default.NVarChar(80), input.phone ?? null)
+                .input('phoneProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'phone'))
+                .input('organization', mssql_1.default.NVarChar(180), input.organization ?? null)
+                .input('organizationProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'organization'))
+                .input('websiteUrl', mssql_1.default.NVarChar(500), input.websiteUrl ?? null)
+                .input('websiteUrlProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'websiteUrl'))
+                .input('socialUrl', mssql_1.default.NVarChar(500), input.socialUrl ?? null)
+                .input('socialUrlProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'socialUrl'))
+                .input('isFeatured', mssql_1.default.Bit, input.isFeatured === true ? 1 : 0)
+                .input('isFeaturedProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'isFeatured'))
+                .input('status', mssql_1.default.NVarChar(30), input.status ?? null)
+                .input('statusProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'status'))
+                .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? null)
+                .input('sortOrderProvided', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'sortOrder'))
+                .input('userId', mssql_1.default.UniqueIdentifier, userId ?? null)
+                .query(`
         UPDATE speaker
         SET name = CASE WHEN @nameProvided = 1 THEN @name ELSE speaker.name END,
           role = CASE WHEN @roleProvided = 1 THEN @role ELSE speaker.role END,
@@ -670,6 +687,7 @@ class SiteDataRepository {
           organization = CASE WHEN @organizationProvided = 1 THEN @organization ELSE speaker.organization END,
           website_url = CASE WHEN @websiteUrlProvided = 1 THEN @websiteUrl ELSE speaker.website_url END,
           social_url = CASE WHEN @socialUrlProvided = 1 THEN @socialUrl ELSE speaker.social_url END,
+          is_featured = CASE WHEN @isFeaturedProvided = 1 THEN @isFeatured ELSE speaker.is_featured END,
           status = CASE WHEN @statusProvided = 1 THEN @status ELSE speaker.status END,
           sort_order = CASE WHEN @sortOrderProvided = 1 THEN @sortOrder ELSE speaker.sort_order END,
           updated_by = COALESCE(@userId, speaker.updated_by),
@@ -680,7 +698,35 @@ class SiteDataRepository {
         LEFT JOIN dbo.event_programs program ON program.id = registration.program_id
         WHERE speaker.id = @id AND speaker.event_id = @eventId AND speaker.deleted_at IS NULL
       `);
-        return result.recordset[0] ? mapSpeaker(result.recordset[0]) : null;
+            return result.recordset[0] ? mapSpeaker(result.recordset[0]) : null;
+        }
+        catch (error) {
+            this.rethrowFeaturedSpeakerConflict(error);
+        }
+    }
+    async assertFeaturedSpeakerAvailable(pool, eventId, excludeId) {
+        const result = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .input('excludeId', mssql_1.default.UniqueIdentifier, excludeId ?? null)
+            .query(`
+        SELECT TOP (1) id
+        FROM dbo.event_speakers
+        WHERE event_id = @eventId
+          AND is_featured = 1
+          AND deleted_at IS NULL
+          AND (@excludeId IS NULL OR id <> @excludeId)
+      `);
+        if (result.recordset[0]) {
+            throw new app_error_1.AppError('Ya existe un ponente destacado. Desmarca el actual antes de seleccionar otro.', 409, 'FEATURED_SPEAKER_EXISTS');
+        }
+    }
+    rethrowFeaturedSpeakerConflict(error) {
+        const sqlError = error;
+        const errorNumber = sqlError?.number ?? sqlError?.originalError?.info?.number;
+        if (errorNumber === 2601 || errorNumber === 2627) {
+            throw new app_error_1.AppError('Ya existe un ponente destacado. Desmarca el actual antes de seleccionar otro.', 409, 'FEATURED_SPEAKER_EXISTS');
+        }
+        throw error;
     }
     async deleteSpeaker(eventId, id, userId) {
         await this.softDelete('event_speakers', eventId, id, userId);

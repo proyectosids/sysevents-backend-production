@@ -91,6 +91,7 @@ export declare class SiteDataRepository {
             websiteUrl: string | null;
             socialUrl: string | null;
             professionalExperience: any;
+            isFeatured: boolean;
             status: Status;
             sortOrder: number;
         }[];
@@ -346,6 +347,7 @@ export declare class SiteDataRepository {
         websiteUrl: string | null;
         socialUrl: string | null;
         professionalExperience: any;
+        isFeatured: boolean;
         status: Status;
         sortOrder: number;
     }[]>;
@@ -366,6 +368,7 @@ export declare class SiteDataRepository {
         websiteUrl: string | null;
         socialUrl: string | null;
         professionalExperience: any;
+        isFeatured: boolean;
         status: Status;
         sortOrder: number;
     }>;
@@ -385,9 +388,12 @@ export declare class SiteDataRepository {
         websiteUrl: string | null;
         socialUrl: string | null;
         professionalExperience: any;
+        isFeatured: boolean;
         status: Status;
         sortOrder: number;
     } | null>;
+    private assertFeaturedSpeakerAvailable;
+    private rethrowFeaturedSpeakerConflict;
     deleteSpeaker(eventId: string, id: string, userId?: string): Promise<void>;
     listFaqs(eventId: string, onlyPublished?: boolean): Promise<{
         id: string;

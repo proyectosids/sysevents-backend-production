@@ -77,6 +77,7 @@ exports.speakerSchema = zod_1.z.object({
     organization: zod_1.z.string().max(180).nullable().optional(),
     websiteUrl: zod_1.z.string().url().max(500).nullable().optional(),
     socialUrl: zod_1.z.string().url().max(500).nullable().optional(),
+    isFeatured: zod_1.z.boolean().optional(),
     status: statusSchema,
     sortOrder: sortOrderSchema,
 });
