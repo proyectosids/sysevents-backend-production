@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getSqlPool = getSqlPool;
 exports.testDatabaseConnection = testDatabaseConnection;
+exports.closeSqlPool = closeSqlPool;
 const mssql_1 = __importDefault(require("mssql"));
 const env_1 = require("./env");
 let pool = null;
@@ -34,5 +35,12 @@ async function getSqlPool() {
 async function testDatabaseConnection() {
     const connectedPool = await getSqlPool();
     await connectedPool.request().query('SELECT 1 AS ok');
+}
+async function closeSqlPool() {
+    if (!pool)
+        return;
+    const activePool = pool;
+    pool = null;
+    await activePool.close();
 }
 //# sourceMappingURL=database.js.map

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateRegistrationStatusSchema = exports.issueCertificateSchema = exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema = exports.updateEventMaterialSchema = exports.createEventMaterialSchema = exports.updateRegistrationFormFieldSchema = exports.createRegistrationFormFieldSchema = exports.updateRegistrationFormSchema = exports.createRegistrationFormSchema = exports.updateMyRegistrationSchema = exports.createParticipantEnrollmentSchema = exports.createRegistrationSchema = exports.updateRegistrationAddonSchema = exports.createRegistrationAddonSchema = exports.updateRegistrationTypeSchema = exports.createRegistrationTypeSchema = exports.certificateTemplateParamsSchema = exports.eventMaterialParamsSchema = exports.registrationAddonParamsSchema = exports.registrationFormFieldParamsSchema = exports.registrationFormParamsSchema = exports.registrationParamsSchema = exports.registrationEventParamsSchema = void 0;
+exports.updateRegistrationStatusSchema = exports.updateTeamCertificateSettingsSchema = exports.issueCertificateSchema = exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema = exports.updateEventMaterialSchema = exports.createEventMaterialSchema = exports.updateRegistrationFormFieldSchema = exports.createRegistrationFormFieldSchema = exports.updateRegistrationFormSchema = exports.createRegistrationFormSchema = exports.updateMyRegistrationSchema = exports.createParticipantEnrollmentSchema = exports.createRegistrationSchema = exports.updateRegistrationAddonSchema = exports.createRegistrationAddonSchema = exports.updateRegistrationTypeSchema = exports.createRegistrationTypeSchema = exports.certificateTemplateParamsSchema = exports.eventMaterialParamsSchema = exports.registrationAddonParamsSchema = exports.registrationFormFieldParamsSchema = exports.registrationFormParamsSchema = exports.registrationParamsSchema = exports.registrationEventParamsSchema = void 0;
 const zod_1 = require("zod");
 exports.registrationEventParamsSchema = zod_1.z.object({
     eventId: zod_1.z.string().uuid(),
@@ -94,6 +94,11 @@ exports.updateMyRegistrationSchema = zod_1.z.object({
         organization: zod_1.z.string().min(2).max(180),
         country: zod_1.z.string().min(2).max(100),
     })).max(50).optional(),
+    teamMembers: zod_1.z.array(zod_1.z.object({
+        role: zod_1.z.enum(['advisor', 'team_member']),
+        fullName: zod_1.z.string().trim().min(2).max(240),
+        email: zod_1.z.string().trim().email().max(255),
+    })).max(20).optional(),
     participationMode: zod_1.z.enum(['attendee', 'presenter']),
 }).superRefine((value, ctx) => {
     if (value.participationMode !== 'presenter')
@@ -150,17 +155,24 @@ exports.createCertificateTemplateSchema = zod_1.z.object({
     registrationTypeId: zod_1.z.string().uuid().nullable().optional(),
     programId: zod_1.z.string().uuid().nullable().optional(),
     backgroundFileId: zod_1.z.string().uuid().nullable().optional(),
+    agendaItemId: zod_1.z.string().uuid().nullable().optional(),
     name: zod_1.z.string().min(2).max(160),
     certificateType: zod_1.z.string().min(2).max(60).default('participant'),
-    targetRole: zod_1.z.enum(['participant', 'speaker', 'advisor']).optional(),
-    recipientSource: zod_1.z.enum(['registration', 'speaker', 'advisor_manual']).optional(),
+    targetRole: zod_1.z.enum(['participant', 'speaker', 'keynote_speaker', 'advisor', 'team_member']).optional(),
+    recipientSource: zod_1.z.enum(['registration', 'speaker', 'team_advisor', 'team_member']).optional(),
     content: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()).optional(),
     isActive: zod_1.z.boolean().optional(),
+    autoIssue: zod_1.z.boolean().optional(),
     sortOrder: zod_1.z.number().int().min(0).optional(),
 });
 exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema.partial();
 exports.issueCertificateSchema = zod_1.z.object({
     registrationId: zod_1.z.string().uuid(),
+});
+exports.updateTeamCertificateSettingsSchema = zod_1.z.object({
+    maxAdvisors: zod_1.z.number().int().min(0).max(20),
+    maxTeamMembers: zod_1.z.number().int().min(0).max(20),
+    certificateDelayMinutes: zod_1.z.number().int().min(0).max(10080),
 });
 exports.updateRegistrationStatusSchema = zod_1.z.object({
     status: zod_1.z.enum(['draft', 'pending_payment', 'registered', 'accepted_pending_payment', 'pending_review', 'approved', 'confirmed', 'cancelled', 'checked_in']),

@@ -230,6 +230,11 @@ export declare class RegistrationsRepository {
         knowledgeAreaId?: string | null;
         knowledgeLineId?: string | null;
         professionalExperience?: Array<Record<string, unknown>>;
+        teamMembers?: Array<{
+            role: 'advisor' | 'team_member';
+            fullName: string;
+            email: string;
+        }>;
         participationMode: 'attendee' | 'presenter';
     }): Promise<EventRegistration | null>;
     listMyRegistrations(userId: string): Promise<EventRegistration[]>;
@@ -272,17 +277,34 @@ export declare class RegistrationsRepository {
         sortOrder?: number;
     }): Promise<any>;
     deactivateEventMaterial(eventId: string, materialId: string): Promise<boolean>;
+    getTeamCertificateSettings(eventId: string): Promise<{
+        maxAdvisors: number;
+        maxTeamMembers: number;
+        certificateDelayMinutes: number;
+    }>;
+    updateTeamCertificateSettings(eventId: string, input: {
+        maxAdvisors: number;
+        maxTeamMembers: number;
+        certificateDelayMinutes: number;
+    }): Promise<{
+        maxAdvisors: number;
+        maxTeamMembers: number;
+        certificateDelayMinutes: number;
+    }>;
+    issueDueCertificates(): Promise<number>;
     listCertificateTemplates(eventId: string): Promise<any[]>;
     createCertificateTemplate(eventId: string, input: {
         registrationTypeId?: string | null;
         programId?: string | null;
         backgroundFileId?: string | null;
+        agendaItemId?: string | null;
         name: string;
         certificateType?: string;
-        targetRole?: 'participant' | 'speaker' | 'advisor';
-        recipientSource?: 'registration' | 'speaker' | 'advisor_manual';
+        targetRole?: 'participant' | 'speaker' | 'keynote_speaker' | 'advisor' | 'team_member';
+        recipientSource?: 'registration' | 'speaker' | 'team_advisor' | 'team_member';
         content?: unknown;
         isActive?: boolean;
+        autoIssue?: boolean;
         sortOrder?: number;
         userId?: string;
     }): Promise<any>;
@@ -290,12 +312,14 @@ export declare class RegistrationsRepository {
         registrationTypeId?: string | null;
         programId?: string | null;
         backgroundFileId?: string | null;
+        agendaItemId?: string | null;
         name?: string;
         certificateType?: string;
-        targetRole?: 'participant' | 'speaker' | 'advisor';
-        recipientSource?: 'registration' | 'speaker' | 'advisor_manual';
+        targetRole?: 'participant' | 'speaker' | 'keynote_speaker' | 'advisor' | 'team_member';
+        recipientSource?: 'registration' | 'speaker' | 'team_advisor' | 'team_member';
         content?: unknown;
         isActive?: boolean;
+        autoIssue?: boolean;
         sortOrder?: number;
     }): Promise<any>;
     deleteCertificateTemplate(eventId: string, templateId: string): Promise<boolean>;

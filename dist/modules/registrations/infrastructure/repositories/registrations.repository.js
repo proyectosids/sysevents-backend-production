@@ -81,6 +81,7 @@ function mapRegistration(row) {
             institution: row.institution,
             country: row.country,
             professionalExperience: parseJson(row.professional_experience_json ?? '[]', []),
+            teamMembers: parseJson(row.team_members_json ?? '[]', []),
             formId: row.form_id ?? null,
             formAnswers: parseJson(row.answers_json ?? '{}', {}),
             speakerId: row.speaker_id ?? null,
@@ -829,6 +830,42 @@ class RegistrationsRepository {
               updated_at = SYSUTCDATETIME()
           WHERE id = @profileId
         `);
+            if (input.teamMembers) {
+                const settings = await transaction
+                    .request()
+                    .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+                    .query(`
+            SELECT TOP 1 max_advisors_per_team, max_team_members_per_team
+            FROM dbo.event_settings WHERE event_id = @eventId
+          `);
+                const maxAdvisors = settings.recordset[0]?.max_advisors_per_team ?? 2;
+                const maxTeamMembers = settings.recordset[0]?.max_team_members_per_team ?? 2;
+                const advisors = input.teamMembers.filter((member) => member.role === 'advisor');
+                const teamMembers = input.teamMembers.filter((member) => member.role === 'team_member');
+                if (advisors.length > maxAdvisors || teamMembers.length > maxTeamMembers) {
+                    throw new app_error_1.AppError('El equipo excede los límites configurados para el evento.', 400, 'TEAM_MEMBER_LIMIT_EXCEEDED');
+                }
+                const normalizedEmails = input.teamMembers.map((member) => member.email.trim().toLowerCase());
+                if (new Set(normalizedEmails).size !== normalizedEmails.length) {
+                    throw new app_error_1.AppError('No se puede repetir el correo de un integrante o asesor.', 400, 'DUPLICATE_TEAM_MEMBER_EMAIL');
+                }
+                await transaction.request()
+                    .input('registrationId', mssql_1.default.UniqueIdentifier, registrationId)
+                    .query('DELETE FROM dbo.event_registration_team_members WHERE registration_id = @registrationId');
+                for (let index = 0; index < input.teamMembers.length; index += 1) {
+                    const member = input.teamMembers[index];
+                    await transaction.request()
+                        .input('registrationId', mssql_1.default.UniqueIdentifier, registrationId)
+                        .input('role', mssql_1.default.NVarChar(30), member.role)
+                        .input('fullName', mssql_1.default.NVarChar(240), member.fullName.trim())
+                        .input('email', mssql_1.default.NVarChar(255), member.email.trim().toLowerCase())
+                        .input('sortOrder', mssql_1.default.Int, index)
+                        .query(`
+              INSERT INTO dbo.event_registration_team_members (registration_id, role, full_name, email, sort_order)
+              VALUES (@registrationId, @role, @fullName, @email, @sortOrder)
+            `);
+                }
+            }
             const form = await this.findRegistrationFormForType(eventId, registration.registration_type_id, input.formId, transaction);
             if (form && input.formAnswers) {
                 await this.validateFormAnswers(form.id, input.formAnswers, transaction);
@@ -862,6 +899,9 @@ class RegistrationsRepository {
             .input('userId', mssql_1.default.UniqueIdentifier, userId)
             .query(`
         SELECT r.*, p.email, p.first_name, p.last_name, p.phone, p.institution, p.country, p.professional_experience_json,
+          (SELECT member.id, member.role, member.full_name AS fullName, member.email, member.sort_order AS sortOrder
+           FROM dbo.event_registration_team_members member WHERE member.registration_id = r.id
+           ORDER BY member.role, member.sort_order FOR JSON PATH) AS team_members_json,
           response.form_id, response.answers_json, speaker.id AS speaker_id,
           e.name AS event_name, e.slug AS event_slug, e.logo_file_id AS event_logo_file_id,
           rt.name AS registration_type_name,
@@ -1003,6 +1043,9 @@ class RegistrationsRepository {
             .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
             .query(`
         SELECT r.*, p.email, p.first_name, p.last_name, p.phone, p.institution, p.country, p.professional_experience_json,
+          (SELECT member.id, member.role, member.full_name AS fullName, member.email, member.sort_order AS sortOrder
+           FROM dbo.event_registration_team_members member WHERE member.registration_id = r.id
+           ORDER BY member.role, member.sort_order FOR JSON PATH) AS team_members_json,
           response.form_id, response.answers_json, speaker.id AS speaker_id
         FROM dbo.event_registrations r
         INNER JOIN dbo.participant_profiles p ON p.id = r.participant_profile_id
@@ -1020,7 +1063,10 @@ class RegistrationsRepository {
             .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
             .input('id', mssql_1.default.UniqueIdentifier, id)
             .query(`
-          SELECT TOP 1 r.*, p.email, p.first_name, p.last_name, p.phone, p.country
+          SELECT TOP 1 r.*, p.email, p.first_name, p.last_name, p.phone, p.institution, p.country, p.professional_experience_json,
+            (SELECT member.id, member.role, member.full_name AS fullName, member.email, member.sort_order AS sortOrder
+             FROM dbo.event_registration_team_members member WHERE member.registration_id = r.id
+             ORDER BY member.role, member.sort_order FOR JSON PATH) AS team_members_json
         FROM dbo.event_registrations r
         INNER JOIN dbo.participant_profiles p ON p.id = r.participant_profile_id
         WHERE r.event_id = @eventId AND r.id = @id
@@ -1351,6 +1397,111 @@ class RegistrationsRepository {
       `);
         return (result.recordset[0]?.affected ?? 0) > 0;
     }
+    async getTeamCertificateSettings(eventId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .query(`
+        SELECT max_advisors_per_team AS maxAdvisors,
+          max_team_members_per_team AS maxTeamMembers,
+          certificate_delay_minutes AS certificateDelayMinutes
+        FROM dbo.event_settings WHERE event_id = @eventId
+      `);
+        return result.recordset[0] ?? { maxAdvisors: 2, maxTeamMembers: 2, certificateDelayMinutes: 60 };
+    }
+    async updateTeamCertificateSettings(eventId, input) {
+        const pool = await (0, database_1.getSqlPool)();
+        await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .input('maxAdvisors', mssql_1.default.Int, input.maxAdvisors)
+            .input('maxTeamMembers', mssql_1.default.Int, input.maxTeamMembers)
+            .input('certificateDelayMinutes', mssql_1.default.Int, input.certificateDelayMinutes)
+            .query(`
+        MERGE dbo.event_settings AS target
+        USING (SELECT @eventId AS event_id) AS source ON target.event_id = source.event_id
+        WHEN MATCHED THEN UPDATE SET
+          max_advisors_per_team = @maxAdvisors,
+          max_team_members_per_team = @maxTeamMembers,
+          certificate_delay_minutes = @certificateDelayMinutes
+        WHEN NOT MATCHED THEN INSERT (
+          event_id, default_currency, max_advisors_per_team, max_team_members_per_team, certificate_delay_minutes
+        ) VALUES (@eventId, 'MXN', @maxAdvisors, @maxTeamMembers, @certificateDelayMinutes);
+      `);
+        return input;
+    }
+    async issueDueCertificates() {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request().query(`
+      DECLARE @issued INT = 0;
+
+      INSERT INTO dbo.event_certificates (
+        event_id, registration_id, template_id, certificate_code, recipient_name,
+        recipient_email, recipient_role, available_at, issued_at
+      )
+      SELECT template.event_id, registration.id, template.id,
+        CONCAT('SYSEVENTS-', UPPER(LEFT(REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', ''), 20))),
+        CONCAT(profile.first_name, ' ', profile.last_name), profile.email, template.target_role,
+        DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)), SYSUTCDATETIME()
+      FROM dbo.event_certificate_templates template
+      INNER JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
+      INNER JOIN dbo.event_settings settings ON settings.event_id = template.event_id
+      INNER JOIN dbo.event_registrations registration ON registration.event_id = template.event_id
+        AND (template.program_id IS NULL OR template.program_id = registration.program_id)
+        AND (template.registration_type_id IS NULL OR template.registration_type_id = registration.registration_type_id)
+      INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
+      LEFT JOIN dbo.event_speakers speaker ON speaker.source_registration_id = registration.id AND speaker.deleted_at IS NULL
+      WHERE template.deleted_at IS NULL AND template.is_active = 1 AND template.auto_issue = 1
+        AND template.target_role IN ('participant','speaker','keynote_speaker')
+        AND registration.status IN ('confirmed','checked_in')
+        AND DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)) <= SYSUTCDATETIME()
+        AND (template.target_role = 'participant'
+          OR (template.target_role = 'speaker' AND speaker.id IS NOT NULL)
+          OR (template.target_role = 'keynote_speaker' AND speaker.id IS NOT NULL
+            AND (LOWER(COALESCE(agenda.speaker_role, '')) LIKE '%magistral%'
+              OR LOWER(COALESCE(agenda.speaker_role, '')) LIKE '%keynote%')))
+        AND (agenda.speaker_email IS NULL OR template.target_role = 'participant' OR LOWER(agenda.speaker_email) = LOWER(profile.email))
+        AND (agenda.speaker_id IS NULL OR template.target_role = 'participant' OR agenda.speaker_id = speaker.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.event_certificates certificate
+          WHERE certificate.registration_id = registration.id AND certificate.template_id = template.id
+            AND certificate.recipient_role = template.target_role AND certificate.recipient_email = profile.email
+        );
+      SET @issued += @@ROWCOUNT;
+
+      INSERT INTO dbo.event_certificates (
+        event_id, registration_id, template_id, certificate_code, recipient_name,
+        recipient_email, recipient_role, available_at, issued_at
+      )
+      SELECT template.event_id, registration.id, template.id,
+        CONCAT('SYSEVENTS-', UPPER(LEFT(REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', ''), 20))),
+        member.full_name, member.email, template.target_role,
+        DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)), SYSUTCDATETIME()
+      FROM dbo.event_certificate_templates template
+      INNER JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
+      INNER JOIN dbo.event_settings settings ON settings.event_id = template.event_id
+      INNER JOIN dbo.event_registrations registration ON registration.event_id = template.event_id
+        AND (template.program_id IS NULL OR template.program_id = registration.program_id)
+        AND (template.registration_type_id IS NULL OR template.registration_type_id = registration.registration_type_id)
+      INNER JOIN dbo.event_registration_team_members member ON member.registration_id = registration.id
+        AND member.role = CASE WHEN template.target_role = 'advisor' THEN 'advisor' ELSE 'team_member' END
+      INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
+      LEFT JOIN dbo.event_speakers speaker ON speaker.source_registration_id = registration.id AND speaker.deleted_at IS NULL
+      WHERE template.deleted_at IS NULL AND template.is_active = 1 AND template.auto_issue = 1
+        AND template.target_role IN ('advisor','team_member')
+        AND registration.status IN ('confirmed','checked_in')
+        AND DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)) <= SYSUTCDATETIME()
+        AND (agenda.speaker_email IS NULL OR LOWER(agenda.speaker_email) = LOWER(profile.email))
+        AND (agenda.speaker_id IS NULL OR agenda.speaker_id = speaker.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.event_certificates certificate
+          WHERE certificate.registration_id = registration.id AND certificate.template_id = template.id
+            AND certificate.recipient_role = template.target_role AND certificate.recipient_email = member.email
+        );
+      SET @issued += @@ROWCOUNT;
+      SELECT @issued AS issued;
+    `);
+        return result.recordset[0]?.issued ?? 0;
+    }
     async listCertificateTemplates(eventId) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool
@@ -1359,13 +1510,15 @@ class RegistrationsRepository {
             .query(`
         SELECT template.id, template.event_id AS eventId, template.registration_type_id AS registrationTypeId,
           template.program_id AS programId, program.name AS programName, template.background_file_id AS backgroundFileId,
+          template.agenda_item_id AS agendaItemId, agenda.title AS agendaItemTitle,
           file_record.original_name AS backgroundOriginalName, file_record.mime_type AS backgroundMimeType,
           template.name, template.certificate_type AS certificateType, template.target_role AS targetRole,
           template.recipient_source AS recipientSource, template.content_json AS contentJson,
-          template.is_active AS isActive, template.sort_order AS sortOrder
+          template.is_active AS isActive, template.auto_issue AS autoIssue, template.sort_order AS sortOrder
         FROM dbo.event_certificate_templates template
         LEFT JOIN dbo.event_programs program ON program.id = template.program_id
         LEFT JOIN dbo.files file_record ON file_record.id = template.background_file_id
+        LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id
         WHERE template.event_id = @eventId AND template.deleted_at IS NULL
         ORDER BY template.sort_order ASC, template.created_at DESC
       `);
@@ -1379,27 +1532,29 @@ class RegistrationsRepository {
             .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
             .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
             .input('backgroundFileId', mssql_1.default.UniqueIdentifier, input.backgroundFileId ?? null)
+            .input('agendaItemId', mssql_1.default.UniqueIdentifier, input.agendaItemId ?? null)
             .input('name', mssql_1.default.NVarChar(160), input.name)
             .input('certificateType', mssql_1.default.NVarChar(60), input.certificateType ?? 'participant')
             .input('targetRole', mssql_1.default.NVarChar(40), input.targetRole ?? input.certificateType ?? 'participant')
             .input('recipientSource', mssql_1.default.NVarChar(40), input.recipientSource ?? 'registration')
             .input('contentJson', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify(input.content ?? {}))
             .input('isActive', mssql_1.default.Bit, input.isActive ?? true)
+            .input('autoIssue', mssql_1.default.Bit, input.autoIssue ?? true)
             .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? 0)
             .input('userId', mssql_1.default.UniqueIdentifier, input.userId ?? null)
             .query(`
         INSERT INTO dbo.event_certificate_templates (
-          event_id, registration_type_id, program_id, background_file_id, name, certificate_type,
-          target_role, recipient_source, content_json, is_active, sort_order, created_by
+          event_id, registration_type_id, program_id, background_file_id, agenda_item_id, name, certificate_type,
+          target_role, recipient_source, content_json, is_active, auto_issue, sort_order, created_by
         )
         OUTPUT INSERTED.id, INSERTED.event_id AS eventId, INSERTED.registration_type_id AS registrationTypeId,
-          INSERTED.program_id AS programId, INSERTED.background_file_id AS backgroundFileId,
+          INSERTED.program_id AS programId, INSERTED.background_file_id AS backgroundFileId, INSERTED.agenda_item_id AS agendaItemId,
           INSERTED.name, INSERTED.certificate_type AS certificateType, INSERTED.target_role AS targetRole,
           INSERTED.recipient_source AS recipientSource, INSERTED.content_json AS contentJson,
-          INSERTED.is_active AS isActive, INSERTED.sort_order AS sortOrder
+          INSERTED.is_active AS isActive, INSERTED.auto_issue AS autoIssue, INSERTED.sort_order AS sortOrder
         VALUES (
-          @eventId, @registrationTypeId, @programId, @backgroundFileId, @name, @certificateType,
-          @targetRole, @recipientSource, @contentJson, @isActive, @sortOrder, @userId
+          @eventId, @registrationTypeId, @programId, @backgroundFileId, @agendaItemId, @name, @certificateType,
+          @targetRole, @recipientSource, @contentJson, @isActive, @autoIssue, @sortOrder, @userId
         )
       `);
         const row = result.recordset[0];
@@ -1417,37 +1572,44 @@ class RegistrationsRepository {
             .input('updateProgramId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'programId'))
             .input('backgroundFileId', mssql_1.default.UniqueIdentifier, input.backgroundFileId ?? null)
             .input('updateBackgroundFileId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'backgroundFileId'))
+            .input('agendaItemId', mssql_1.default.UniqueIdentifier, input.agendaItemId ?? null)
+            .input('updateAgendaItemId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'agendaItemId'))
             .input('name', mssql_1.default.NVarChar(160), input.name ?? null)
             .input('certificateType', mssql_1.default.NVarChar(60), input.certificateType ?? null)
             .input('targetRole', mssql_1.default.NVarChar(40), input.targetRole ?? null)
             .input('recipientSource', mssql_1.default.NVarChar(40), input.recipientSource ?? null)
             .input('contentJson', mssql_1.default.NVarChar(mssql_1.default.MAX), input.content === undefined ? null : JSON.stringify(input.content))
             .input('isActive', mssql_1.default.Bit, input.isActive ?? null)
+            .input('autoIssue', mssql_1.default.Bit, input.autoIssue ?? null)
             .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? null)
             .query(`
         UPDATE dbo.event_certificate_templates
         SET registration_type_id = CASE WHEN @updateRegistrationTypeId = 1 THEN @registrationTypeId ELSE registration_type_id END,
             program_id = CASE WHEN @updateProgramId = 1 THEN @programId ELSE program_id END,
             background_file_id = CASE WHEN @updateBackgroundFileId = 1 THEN @backgroundFileId ELSE background_file_id END,
+            agenda_item_id = CASE WHEN @updateAgendaItemId = 1 THEN @agendaItemId ELSE agenda_item_id END,
             name = COALESCE(@name, name),
             certificate_type = COALESCE(@certificateType, certificate_type),
             target_role = COALESCE(@targetRole, target_role),
             recipient_source = COALESCE(@recipientSource, recipient_source),
             content_json = COALESCE(@contentJson, content_json),
             is_active = COALESCE(@isActive, is_active),
+            auto_issue = COALESCE(@autoIssue, auto_issue),
             sort_order = COALESCE(@sortOrder, sort_order),
             updated_at = SYSUTCDATETIME()
         WHERE id = @templateId AND event_id = @eventId AND deleted_at IS NULL;
 
         SELECT template.id, template.event_id AS eventId, template.registration_type_id AS registrationTypeId,
           template.program_id AS programId, program.name AS programName, template.background_file_id AS backgroundFileId,
+          template.agenda_item_id AS agendaItemId, agenda.title AS agendaItemTitle,
           file_record.original_name AS backgroundOriginalName, file_record.mime_type AS backgroundMimeType,
           template.name, template.certificate_type AS certificateType, template.target_role AS targetRole,
           template.recipient_source AS recipientSource, template.content_json AS contentJson,
-          template.is_active AS isActive, template.sort_order AS sortOrder
+          template.is_active AS isActive, template.auto_issue AS autoIssue, template.sort_order AS sortOrder
         FROM dbo.event_certificate_templates template
         LEFT JOIN dbo.event_programs program ON program.id = template.program_id
         LEFT JOIN dbo.files file_record ON file_record.id = template.background_file_id
+        LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id
         WHERE template.id = @templateId AND template.event_id = @eventId AND template.deleted_at IS NULL;
       `);
         const row = result.recordset[0];
@@ -1476,8 +1638,10 @@ class RegistrationsRepository {
             .input('registrationId', mssql_1.default.UniqueIdentifier, registrationId)
             .query(`
         SELECT TOP 1 registration.status, template.target_role, template.recipient_source,
-          CAST(CASE WHEN speaker.id IS NULL THEN 0 ELSE 1 END AS BIT) AS is_speaker
+          CAST(CASE WHEN speaker.id IS NULL THEN 0 ELSE 1 END AS BIT) AS is_speaker,
+          CONCAT(profile.first_name, ' ', profile.last_name) AS recipient_name, profile.email AS recipient_email
         FROM dbo.event_registrations registration
+        INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
         INNER JOIN dbo.event_certificate_templates template
           ON template.id = @templateId AND template.event_id = registration.event_id
         LEFT JOIN dbo.event_speakers speaker
@@ -1493,14 +1657,14 @@ class RegistrationsRepository {
         if (!eligible) {
             throw new app_error_1.AppError('Registration or certificate template not found', 404, 'CERTIFICATE_NOT_FOUND');
         }
-        if (eligible.status !== 'confirmed') {
+        if (!['confirmed', 'checked_in'].includes(eligible.status)) {
             throw new app_error_1.AppError('Certificate requires a confirmed payment', 409, 'PAYMENT_REQUIRED_FOR_CERTIFICATE');
         }
         if ((eligible.target_role === 'speaker' || eligible.recipient_source === 'speaker') && !eligible.is_speaker) {
             throw new app_error_1.AppError('Speaker certificate requires an approved speaker', 409, 'SPEAKER_APPROVAL_REQUIRED');
         }
-        if (eligible.recipient_source === 'advisor_manual') {
-            throw new app_error_1.AppError('Advisor certificates require manual recipient issuance', 409, 'ADVISOR_MANUAL_ISSUANCE_REQUIRED');
+        if (['team_advisor', 'team_member'].includes(eligible.recipient_source)) {
+            throw new app_error_1.AppError('Las constancias del equipo se generan automáticamente desde los integrantes registrados.', 409, 'TEAM_CERTIFICATE_AUTO_ISSUANCE_REQUIRED');
         }
         const code = `SYSEVENTS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
         const result = await pool
@@ -1509,13 +1673,22 @@ class RegistrationsRepository {
             .input('templateId', mssql_1.default.UniqueIdentifier, templateId)
             .input('registrationId', mssql_1.default.UniqueIdentifier, registrationId)
             .input('certificateCode', mssql_1.default.NVarChar(80), code)
+            .input('recipientName', mssql_1.default.NVarChar(240), eligible.recipient_name)
+            .input('recipientEmail', mssql_1.default.NVarChar(255), eligible.recipient_email)
+            .input('recipientRole', mssql_1.default.NVarChar(40), eligible.target_role)
             .input('userId', mssql_1.default.UniqueIdentifier, userId)
             .query(`
-        INSERT INTO dbo.event_certificates (event_id, registration_id, template_id, certificate_code, issued_by)
+        INSERT INTO dbo.event_certificates (
+          event_id, registration_id, template_id, certificate_code, recipient_name,
+          recipient_email, recipient_role, available_at, issued_by
+        )
         OUTPUT INSERTED.id, INSERTED.event_id AS eventId, INSERTED.registration_id AS registrationId,
           INSERTED.template_id AS templateId, INSERTED.certificate_code AS certificateCode,
           INSERTED.status, INSERTED.issued_at AS issuedAt
-        VALUES (@eventId, @registrationId, @templateId, @certificateCode, @userId)
+        VALUES (
+          @eventId, @registrationId, @templateId, @certificateCode, @recipientName,
+          @recipientEmail, @recipientRole, SYSUTCDATETIME(), @userId
+        )
       `);
         return result.recordset[0];
     }

@@ -292,8 +292,20 @@ exports.registrationsRouter.delete('/:eventId/materials/:materialId', authentica
     }
     return (0, api_response_1.sendSuccess)(res, 'Event material deleted successfully');
 }));
+exports.registrationsRouter.get('/:eventId/team-certificate-settings', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = registration_schemas_1.registrationEventParamsSchema.parse(req.params);
+    const settings = await registrationsRepository.getTeamCertificateSettings(eventId);
+    return (0, api_response_1.sendSuccess)(res, 'Team certificate settings retrieved successfully', settings);
+}));
+exports.registrationsRouter.patch('/:eventId/team-certificate-settings', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('certificates.manage'), (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = registration_schemas_1.registrationEventParamsSchema.parse(req.params);
+    const input = registration_schemas_1.updateTeamCertificateSettingsSchema.parse(req.body);
+    const settings = await registrationsRepository.updateTeamCertificateSettings(eventId, input);
+    return (0, api_response_1.sendSuccess)(res, 'Team certificate settings updated successfully', settings);
+}));
 exports.registrationsRouter.get('/:eventId/certificate-templates', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('certificates.read'), (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = registration_schemas_1.registrationEventParamsSchema.parse(req.params);
+    await registrationsRepository.issueDueCertificates();
     const templates = await registrationsRepository.listCertificateTemplates(eventId);
     return (0, api_response_1.sendSuccess)(res, 'Certificate templates retrieved successfully', templates);
 }));

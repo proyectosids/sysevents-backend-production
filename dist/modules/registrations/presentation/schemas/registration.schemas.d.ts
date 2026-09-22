@@ -119,6 +119,14 @@ export declare const updateMyRegistrationSchema: z.ZodObject<{
         organization: z.ZodString;
         country: z.ZodString;
     }, z.core.$strip>>>;
+    teamMembers: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        role: z.ZodEnum<{
+            advisor: "advisor";
+            team_member: "team_member";
+        }>;
+        fullName: z.ZodString;
+        email: z.ZodString;
+    }, z.core.$strip>>>;
     participationMode: z.ZodEnum<{
         attendee: "attendee";
         presenter: "presenter";
@@ -248,44 +256,59 @@ export declare const createCertificateTemplateSchema: z.ZodObject<{
     registrationTypeId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     backgroundFileId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    agendaItemId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     name: z.ZodString;
     certificateType: z.ZodDefault<z.ZodString>;
     targetRole: z.ZodOptional<z.ZodEnum<{
+        advisor: "advisor";
+        team_member: "team_member";
         participant: "participant";
         speaker: "speaker";
-        advisor: "advisor";
+        keynote_speaker: "keynote_speaker";
     }>>;
     recipientSource: z.ZodOptional<z.ZodEnum<{
+        team_member: "team_member";
         speaker: "speaker";
         registration: "registration";
-        advisor_manual: "advisor_manual";
+        team_advisor: "team_advisor";
     }>>;
     content: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     isActive: z.ZodOptional<z.ZodBoolean>;
+    autoIssue: z.ZodOptional<z.ZodBoolean>;
     sortOrder: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strip>;
 export declare const updateCertificateTemplateSchema: z.ZodObject<{
     registrationTypeId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     programId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     backgroundFileId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
+    agendaItemId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     name: z.ZodOptional<z.ZodString>;
     certificateType: z.ZodOptional<z.ZodDefault<z.ZodString>>;
     targetRole: z.ZodOptional<z.ZodOptional<z.ZodEnum<{
+        advisor: "advisor";
+        team_member: "team_member";
         participant: "participant";
         speaker: "speaker";
-        advisor: "advisor";
+        keynote_speaker: "keynote_speaker";
     }>>>;
     recipientSource: z.ZodOptional<z.ZodOptional<z.ZodEnum<{
+        team_member: "team_member";
         speaker: "speaker";
         registration: "registration";
-        advisor_manual: "advisor_manual";
+        team_advisor: "team_advisor";
     }>>>;
     content: z.ZodOptional<z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>>;
     isActive: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
+    autoIssue: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
     sortOrder: z.ZodOptional<z.ZodOptional<z.ZodNumber>>;
 }, z.core.$strip>;
 export declare const issueCertificateSchema: z.ZodObject<{
     registrationId: z.ZodString;
+}, z.core.$strip>;
+export declare const updateTeamCertificateSettingsSchema: z.ZodObject<{
+    maxAdvisors: z.ZodNumber;
+    maxTeamMembers: z.ZodNumber;
+    certificateDelayMinutes: z.ZodNumber;
 }, z.core.$strip>;
 export declare const updateRegistrationStatusSchema: z.ZodObject<{
     status: z.ZodEnum<{

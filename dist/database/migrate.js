@@ -60,10 +60,15 @@ async function main() {
     }
     logger_1.logger.info('Migrations completed');
 }
-main().catch((error) => {
+main()
+    .then(async () => {
+    await (0, database_1.closeSqlPool)();
+})
+    .catch(async (error) => {
     logger_1.logger.error('Migration failed', {
         error: error instanceof Error ? error.message : String(error),
     });
+    await (0, database_1.closeSqlPool)().catch(() => undefined);
     process.exit(1);
 });
 //# sourceMappingURL=migrate.js.map

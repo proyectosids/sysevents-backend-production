@@ -18,6 +18,13 @@ export type EventRegistration = {
     knowledgeAreaId?: string | null;
     knowledgeLineId?: string | null;
     professionalExperience?: Array<Record<string, unknown>>;
+    teamMembers?: Array<{
+        id: string;
+        role: 'advisor' | 'team_member';
+        fullName: string;
+        email: string;
+        sortOrder: number;
+    }>;
     participationMode?: 'attendee' | 'presenter';
     formId?: string | null;
     formAnswers?: Record<string, unknown>;
