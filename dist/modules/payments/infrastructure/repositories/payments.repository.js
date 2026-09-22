@@ -23,6 +23,29 @@ function mapOrder(row) {
     };
 }
 class PaymentsRepository {
+    async getEventPaymentPolicy(eventId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .query(`
+        SELECT TOP 1 payment_policy
+        FROM dbo.event_settings
+        WHERE event_id = @eventId
+      `);
+        return result.recordset[0]?.payment_policy ?? 'immediate';
+    }
+    async hasAcceptedSubmission(registrationId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('registrationId', mssql_1.default.UniqueIdentifier, registrationId)
+            .query(`
+        SELECT COUNT(1) AS total
+        FROM dbo.submissions
+        WHERE registration_id = @registrationId
+          AND status = 'accepted' AND deleted_at IS NULL
+      `);
+        return (result.recordset[0]?.total ?? 0) > 0;
+    }
     async findLatestOrder(registrationId, provider, statuses) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool.request()

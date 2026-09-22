@@ -828,6 +828,17 @@ class SiteDataRepository {
         WHEN NOT MATCHED THEN
           INSERT (event_id, default_currency, payment_policy)
           VALUES (@eventId, 'MXN', @paymentPolicy);
+
+        IF @paymentPolicy = 'free'
+        BEGIN
+          UPDATE dbo.event_registrations
+          SET status = 'confirmed', updated_at = SYSUTCDATETIME()
+          WHERE event_id = @eventId
+            AND (
+              status = 'accepted_pending_payment'
+              OR (participation_mode = 'attendee' AND status = 'pending_payment')
+            );
+        END
       `);
     }
     async findActivePaymentSettings(eventId, provider) {

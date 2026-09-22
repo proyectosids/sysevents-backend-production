@@ -67,7 +67,7 @@ function mapRegistration(row) {
         programId: row.program_id,
         participantProfileId: row.participant_profile_id,
         userId: row.user_id,
-        status: row.status,
+        status: row.effective_status ?? row.status,
         amountCents: row.amount_cents,
         currency: row.currency,
         participationMode: row.participation_mode ?? 'presenter',
@@ -627,13 +627,15 @@ class RegistrationsRepository {
                 .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
                 .query('SELECT TOP 1 payment_policy FROM dbo.event_settings WHERE event_id = @eventId');
             const paymentPolicy = settings.recordset[0]?.payment_policy ?? 'immediate';
-            const status = paymentPolicy === 'free'
-                ? 'confirmed'
-                : (input.deferForm || paymentPolicy === 'after_acceptance') && totalAmountCents > 0
-                    ? 'pending_review'
-                    : totalAmountCents > 0
-                        ? 'pending_payment'
-                        : 'registered';
+            const status = input.deferForm
+                ? 'draft'
+                : paymentPolicy === 'free'
+                    ? 'confirmed'
+                    : paymentPolicy === 'after_acceptance' && totalAmountCents > 0
+                        ? 'pending_review'
+                        : totalAmountCents > 0
+                            ? 'pending_payment'
+                            : 'registered';
             const form = input.deferForm ? null : await this.findRegistrationFormForType(input.eventId, input.registrationTypeId, input.formId, transaction);
             if (form && !input.deferForm) {
                 await this.validateFormAnswers(form.id, input.formAnswers ?? {}, transaction);
@@ -724,9 +726,14 @@ class RegistrationsRepository {
                 .input('userId', mssql_1.default.UniqueIdentifier, userId)
                 .query(`
           SELECT TOP 1 registration.participant_profile_id, registration.registration_type_id, registration.status,
-            registration.amount_cents, JSON_VALUE(program.settings_json, '$.fullSubmissionType') AS full_submission_type
+            registration.amount_cents, COALESCE(settings.payment_policy, 'immediate') AS payment_policy,
+            CONVERT(bit, CASE WHEN EXISTS (
+              SELECT 1 FROM dbo.submissions submission
+              WHERE submission.registration_id = registration.id
+                AND submission.status = 'accepted' AND submission.deleted_at IS NULL
+            ) THEN 1 ELSE 0 END) AS has_accepted_submission
           FROM dbo.event_registrations registration
-          LEFT JOIN dbo.event_programs program ON program.id = registration.program_id
+          LEFT JOIN dbo.event_settings settings ON settings.event_id = registration.event_id
           WHERE registration.id = @registrationId AND registration.event_id = @eventId AND registration.user_id = @userId
         `);
             const registration = current.recordset[0];
@@ -757,12 +764,14 @@ class RegistrationsRepository {
                     throw new app_error_1.AppError('El área y la línea de conocimiento seleccionadas no son válidas.', 400, 'INVALID_KNOWLEDGE_SELECTION');
                 }
             }
-            const programSkipsSubmission = registration.full_submission_type === 'none';
+            const paymentRequired = registration.payment_policy !== 'free';
             const nextStatus = input.participationMode === 'attendee'
-                ? (registration.amount_cents > 0 ? 'pending_payment' : 'confirmed')
-                : programSkipsSubmission
-                    ? 'accepted_pending_payment'
-                    : (['accepted_pending_payment', 'confirmed', 'checked_in'].includes(registration.status) ? registration.status : 'pending_review');
+                ? (paymentRequired ? 'pending_payment' : 'confirmed')
+                : registration.has_accepted_submission
+                    ? (['confirmed', 'checked_in'].includes(registration.status)
+                        ? registration.status
+                        : paymentRequired ? 'accepted_pending_payment' : 'confirmed')
+                    : 'pending_review';
             await transaction
                 .request()
                 .input('registrationId', mssql_1.default.UniqueIdentifier, registrationId)
@@ -899,6 +908,21 @@ class RegistrationsRepository {
             .input('userId', mssql_1.default.UniqueIdentifier, userId)
             .query(`
         SELECT r.*, p.email, p.first_name, p.last_name, p.phone, p.institution, p.country, p.professional_experience_json,
+          CASE
+            WHEN r.participation_mode <> 'attendee'
+              AND r.status IN ('pending_payment', 'accepted_pending_payment')
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.submissions submission
+                WHERE submission.registration_id = r.id
+                  AND submission.status = 'accepted' AND submission.deleted_at IS NULL
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.payment_orders payment
+                WHERE payment.registration_id = r.id AND payment.status = 'paid'
+              )
+            THEN 'pending_review'
+            ELSE r.status
+          END AS effective_status,
           (SELECT member.id, member.role, member.full_name AS fullName, member.email, member.sort_order AS sortOrder
            FROM dbo.event_registration_team_members member WHERE member.registration_id = r.id
            ORDER BY member.role, member.sort_order FOR JSON PATH) AS team_members_json,

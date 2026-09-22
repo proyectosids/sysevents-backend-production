@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateSponsorSchema = exports.updateFaqSchema = exports.updateSpeakerSchema = exports.updateTestimonialSchema = exports.updateKnowledgeLineSchema = exports.updateKnowledgeAreaSchema = exports.updateProgramSchema = exports.updateAgendaItemSchema = exports.updateAgendaDaySchema = exports.paymentSettingsSchema = exports.sponsorSchema = exports.faqSchema = exports.speakerSchema = exports.testimonialSchema = exports.agendaItemSchema = exports.agendaDaySchema = exports.knowledgeLineSchema = exports.knowledgeAreaSchema = exports.programSchema = exports.siteDataItemParamsSchema = exports.siteDataEventParamsSchema = void 0;
+exports.updateSponsorSchema = exports.updateFaqSchema = exports.updateSpeakerSchema = exports.updateTestimonialSchema = exports.updateKnowledgeLineSchema = exports.updateKnowledgeAreaSchema = exports.updateProgramSchema = exports.updateAgendaItemSchema = exports.updateAgendaDaySchema = exports.paymentPolicySchema = exports.paymentSettingsSchema = exports.sponsorSchema = exports.faqSchema = exports.speakerSchema = exports.testimonialSchema = exports.agendaItemSchema = exports.agendaDaySchema = exports.knowledgeLineSchema = exports.knowledgeAreaSchema = exports.programSchema = exports.siteDataItemParamsSchema = exports.siteDataEventParamsSchema = void 0;
 const zod_1 = require("zod");
 exports.siteDataEventParamsSchema = zod_1.z.object({
     eventId: zod_1.z.string().uuid(),
@@ -106,6 +106,9 @@ exports.paymentSettingsSchema = zod_1.z.object({
     webhookSecret: zod_1.z.preprocess((value) => (typeof value === 'string' && value.trim() === '' ? undefined : value), zod_1.z.string().min(1).optional()),
     openpayPublicKey: zod_1.z.preprocess((value) => (typeof value === 'string' && value.trim() === '' ? undefined : value), zod_1.z.string().max(500).nullable().optional()),
     openpayApiUrl: zod_1.z.preprocess((value) => (typeof value === 'string' && value.trim() === '' ? undefined : value), zod_1.z.string().url().max(500).nullable().optional()),
+});
+exports.paymentPolicySchema = zod_1.z.object({
+    paymentPolicy: zod_1.z.enum(['immediate', 'after_acceptance', 'manual', 'free']),
 });
 exports.updateAgendaDaySchema = exports.agendaDaySchema.partial();
 exports.updateAgendaItemSchema = exports.agendaItemSchema.partial();

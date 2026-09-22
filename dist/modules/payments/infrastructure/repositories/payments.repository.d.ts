@@ -1,5 +1,7 @@
 import type { PaymentOrder, PaymentProviderName } from '../../domain/entities/payment';
 export declare class PaymentsRepository {
+    getEventPaymentPolicy(eventId: string): Promise<string>;
+    hasAcceptedSubmission(registrationId: string): Promise<boolean>;
     findLatestOrder(registrationId: string, provider: PaymentProviderName, statuses: Array<'created' | 'pending' | 'paid' | 'failed' | 'cancelled'>): Promise<PaymentOrder | null>;
     cancelOrder(orderId: string): Promise<void>;
     restoreRegistrationPaymentPending(registrationId: string, presenter: boolean): Promise<void>;

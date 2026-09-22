@@ -22,6 +22,12 @@ class MercadoPagoPaymentService {
             throw new app_error_1.AppError('Registration not found', 404, 'REGISTRATION_NOT_FOUND');
         if (registration.userId !== userId)
             throw new app_error_1.AppError('Permission denied', 403, 'FORBIDDEN');
+        const paymentPolicy = await this.paymentsRepository.getEventPaymentPolicy(eventId);
+        if (paymentPolicy === 'free')
+            throw new app_error_1.AppError('Este evento está configurado sin cobro.', 409, 'REGISTRATION_PAYMENT_NOT_REQUIRED');
+        if (registration.participationMode !== 'attendee' && !(await this.paymentsRepository.hasAcceptedSubmission(registrationId))) {
+            throw new app_error_1.AppError('El pago se habilita cuando el trabajo ha sido aprobado.', 409, 'SUBMISSION_APPROVAL_REQUIRED');
+        }
         if (selection?.registrationTypeId) {
             const updated = await this.registrationsRepository.applyPaymentSelection(eventId, registrationId, userId, {
                 registrationTypeId: selection.registrationTypeId,
@@ -30,6 +36,8 @@ class MercadoPagoPaymentService {
             if (updated)
                 registration = updated;
         }
+        if (registration.amountCents <= 0)
+            throw new app_error_1.AppError('No hay un importe pendiente para este registro.', 409, 'REGISTRATION_PAYMENT_NOT_REQUIRED');
         if (!(0, payment_country_1.isMexicoCountry)(registration.country)) {
             throw new app_error_1.AppError('Mercado Pago solo está disponible para participantes de México. Utiliza Stripe para pagos internacionales.', 409, 'MERCADOPAGO_NOT_AVAILABLE_FOR_COUNTRY');
         }

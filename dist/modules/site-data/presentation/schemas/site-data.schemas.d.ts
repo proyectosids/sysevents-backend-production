@@ -137,6 +137,14 @@ export declare const paymentSettingsSchema: z.ZodObject<{
     openpayPublicKey: z.ZodPreprocess<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     openpayApiUrl: z.ZodPreprocess<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
 }, z.core.$strip>;
+export declare const paymentPolicySchema: z.ZodObject<{
+    paymentPolicy: z.ZodEnum<{
+        immediate: "immediate";
+        free: "free";
+        after_acceptance: "after_acceptance";
+        manual: "manual";
+    }>;
+}, z.core.$strip>;
 export declare const updateAgendaDaySchema: z.ZodObject<{
     label: z.ZodOptional<z.ZodString>;
     dateLabel: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;

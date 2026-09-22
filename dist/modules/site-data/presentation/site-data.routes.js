@@ -145,6 +145,13 @@ exports.siteDataRouter.get('/:eventId/site-data/payment-settings', authenticate_
     const { eventId } = site_data_schemas_1.siteDataEventParamsSchema.parse(req.params);
     return (0, api_response_1.sendSuccess)(res, 'Payment settings retrieved successfully', await repository.listPaymentSettings(eventId));
 }));
+exports.siteDataRouter.patch('/:eventId/site-data/payment-policy', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('cms.manage'), (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = site_data_schemas_1.siteDataEventParamsSchema.parse(req.params);
+    await assertEvent(eventId);
+    const { paymentPolicy } = site_data_schemas_1.paymentPolicySchema.parse(req.body);
+    await repository.updatePaymentPolicy(eventId, paymentPolicy);
+    return (0, api_response_1.sendSuccess)(res, 'Payment policy updated successfully', { paymentPolicy });
+}));
 exports.siteDataRouter.post('/:eventId/site-data/payment-settings', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('cms.manage'), (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = site_data_schemas_1.siteDataEventParamsSchema.parse(req.params);
     await assertEvent(eventId);

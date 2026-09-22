@@ -21,6 +21,12 @@ class OpenpayPaymentService {
             throw new app_error_1.AppError('Registration not found', 404, 'REGISTRATION_NOT_FOUND');
         if (registration.userId !== userId)
             throw new app_error_1.AppError('Permission denied', 403, 'FORBIDDEN');
+        const paymentPolicy = await this.paymentsRepository.getEventPaymentPolicy(eventId);
+        if (paymentPolicy === 'free')
+            throw new app_error_1.AppError('Este evento está configurado sin cobro.', 409, 'REGISTRATION_PAYMENT_NOT_REQUIRED');
+        if (registration.participationMode !== 'attendee' && !(await this.paymentsRepository.hasAcceptedSubmission(registrationId))) {
+            throw new app_error_1.AppError('El pago se habilita cuando el trabajo ha sido aprobado.', 409, 'SUBMISSION_APPROVAL_REQUIRED');
+        }
         if (selection?.registrationTypeId) {
             const updated = await this.registrationsRepository.applyPaymentSelection(eventId, registrationId, userId, {
                 registrationTypeId: selection.registrationTypeId,
@@ -29,6 +35,8 @@ class OpenpayPaymentService {
             if (updated)
                 registration = updated;
         }
+        if (registration.amountCents <= 0)
+            throw new app_error_1.AppError('No hay un importe pendiente para este registro.', 409, 'REGISTRATION_PAYMENT_NOT_REQUIRED');
         const settings = await this.siteDataRepository.findActivePaymentSettings(eventId, 'openpay');
         const merchantId = settings?.publicKey?.trim();
         const privateKey = settings?.secretKey?.trim();

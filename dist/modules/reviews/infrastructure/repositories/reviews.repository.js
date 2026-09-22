@@ -653,11 +653,16 @@ class ReviewsRepository {
                     .request()
                     .input('registrationId', mssql_1.default.UniqueIdentifier, submission.registration_id)
                     .query(`
-            UPDATE dbo.event_registrations
-            SET status = CASE WHEN amount_cents > 0 THEN 'accepted_pending_payment' ELSE 'confirmed' END,
+            UPDATE registration
+            SET status = CASE
+                  WHEN COALESCE(settings.payment_policy, 'immediate') = 'free' THEN 'confirmed'
+                  ELSE 'accepted_pending_payment'
+                END,
                 updated_at = SYSUTCDATETIME()
-            WHERE id = @registrationId
-              AND status = 'pending_review'
+            FROM dbo.event_registrations registration
+            LEFT JOIN dbo.event_settings settings ON settings.event_id = registration.event_id
+            WHERE registration.id = @registrationId
+              AND registration.status = 'pending_review'
           `);
                 await transaction
                     .request()
