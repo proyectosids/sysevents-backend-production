@@ -1,1 +1,1 @@
-{"version":3,"file":"role.js","sourceRoot":"","sources":["../../../../../../../backend/src/modules/iam/domain/entities/role.ts"],"names":[],"mappings":""}
+{"version":3,"file":"role.js","sourceRoot":"","sources":["../../../../../../src/modules/iam/domain/entities/role.ts"],"names":[],"mappings":""}
