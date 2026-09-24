@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TemplateImporterService = void 0;
+exports.rewriteHtmlAssetReferences = rewriteHtmlAssetReferences;
 exports.removeTemplatePreloaders = removeTemplatePreloaders;
 const crypto_1 = __importDefault(require("crypto"));
 const promises_1 = __importDefault(require("fs/promises"));
@@ -317,9 +318,18 @@ function publicResolvedAssetUrl(templateKey, assetPath) {
         .map((part) => encodeURIComponent(part))
         .join('/')}`;
 }
+function isTemplateDocumentReference(value) {
+    return /\.html?(?:[?#].*)?$/i.test(value.trim());
+}
 function rewriteHtmlAssetReferences(html, templateKey, sourceFile) {
     return html
         .replace(/\s(src|href)=["']([^"']+)["']/gi, (full, attribute, value) => {
+        // Page navigation belongs to the SysEvents public router. Keeping the
+        // authored document reference lets the public renderer map it to the
+        // corresponding /events/:slug/:pageSlug route. Assets and downloads
+        // continue to use the protected template asset endpoint.
+        if (attribute.toLowerCase() === 'href' && isTemplateDocumentReference(value))
+            return full;
         return ` ${attribute}="${publicAssetUrl(templateKey, sourceFile, value)}"`;
     })
         .replace(/\s(srcset)=["']([^"']+)["']/gi, (full, attribute, value) => {

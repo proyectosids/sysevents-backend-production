@@ -1,3 +1,4 @@
+export declare function rewriteHtmlAssetReferences(html: string, templateKey: string, sourceFile: string): string;
 export declare function removeTemplatePreloaders(html: string): string;
 export declare class TemplateImporterService {
     private readonly rootPath;
