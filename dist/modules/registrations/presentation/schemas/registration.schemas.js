@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateRegistrationStatusSchema = exports.updateTeamCertificateSettingsSchema = exports.issueCertificateSchema = exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema = exports.updateEventMaterialSchema = exports.createEventMaterialSchema = exports.updateRegistrationFormFieldSchema = exports.createRegistrationFormFieldSchema = exports.updateRegistrationFormSchema = exports.createRegistrationFormSchema = exports.updateMyRegistrationSchema = exports.createParticipantEnrollmentSchema = exports.createRegistrationSchema = exports.updateRegistrationAddonSchema = exports.createRegistrationAddonSchema = exports.updateRegistrationTypeSchema = exports.createRegistrationTypeSchema = exports.certificateTemplateParamsSchema = exports.eventMaterialParamsSchema = exports.registrationAddonParamsSchema = exports.registrationFormFieldParamsSchema = exports.registrationFormParamsSchema = exports.registrationParamsSchema = exports.registrationEventParamsSchema = void 0;
+exports.updateRegistrationStatusSchema = exports.updateTeamCertificateSettingsSchema = exports.issueCertificateSchema = exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema = exports.updateEventMaterialSchema = exports.createEventMaterialSchema = exports.updateRegistrationFormFieldSchema = exports.createRegistrationFormFieldSchema = exports.updateRegistrationFormSchema = exports.createRegistrationFormSchema = exports.updateMyRegistrationSchema = exports.createParticipantEnrollmentSchema = exports.createRegistrationSchema = exports.updateRegistrationAddonSchema = exports.createRegistrationAddonSchema = exports.updateRegistrationTypeSchema = exports.createRegistrationTypeSchema = exports.certificateIdParamsSchema = exports.certificateTemplateParamsSchema = exports.eventMaterialParamsSchema = exports.registrationAddonParamsSchema = exports.registrationFormFieldParamsSchema = exports.registrationFormParamsSchema = exports.registrationParamsSchema = exports.registrationEventParamsSchema = void 0;
 const zod_1 = require("zod");
 exports.registrationEventParamsSchema = zod_1.z.object({
     eventId: zod_1.z.string().uuid(),
@@ -22,6 +22,9 @@ exports.eventMaterialParamsSchema = exports.registrationEventParamsSchema.extend
 });
 exports.certificateTemplateParamsSchema = exports.registrationEventParamsSchema.extend({
     templateId: zod_1.z.string().uuid(),
+});
+exports.certificateIdParamsSchema = zod_1.z.object({
+    certificateId: zod_1.z.string().uuid(),
 });
 exports.createRegistrationTypeSchema = zod_1.z.object({
     programId: zod_1.z.string().uuid().nullable().optional(),
@@ -145,6 +148,7 @@ exports.createEventMaterialSchema = zod_1.z.object({
     title: zod_1.z.string().min(2).max(180),
     description: zod_1.z.string().max(500).optional(),
     materialType: zod_1.z.enum(['convocatoria', 'plantilla_cartel', 'plantilla_presentacion', 'lineamientos', 'formato_resumen', 'reglamento', 'other']).optional(),
+    materialTypeLabel: zod_1.z.string().trim().min(2).max(120).nullable().optional(),
     visibility: zod_1.z.enum(['public', 'registered', 'registration_type']).optional(),
     registrationTypeId: zod_1.z.string().uuid().nullable().optional(),
     isActive: zod_1.z.boolean().optional(),

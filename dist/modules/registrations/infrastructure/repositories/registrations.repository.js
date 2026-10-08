@@ -1273,6 +1273,7 @@ class RegistrationsRepository {
             .query(`
         SELECT m.id, m.event_id AS eventId, m.file_id AS fileId, m.program_id AS programId,
           p.name AS programName, m.title, m.description, m.material_type AS materialType,
+          m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
           f.size_bytes AS sizeBytes
@@ -1295,6 +1296,7 @@ class RegistrationsRepository {
             .query(`
         SELECT DISTINCT m.id, m.event_id AS eventId, m.file_id AS fileId, m.program_id AS programId,
           p.name AS programName, m.title, m.description, m.material_type AS materialType,
+          m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
           f.size_bytes AS sizeBytes
@@ -1347,6 +1349,7 @@ class RegistrationsRepository {
             .input('title', mssql_1.default.NVarChar(180), input.title)
             .input('description', mssql_1.default.NVarChar(500), input.description ?? null)
             .input('materialType', mssql_1.default.NVarChar(80), input.materialType ?? 'other')
+            .input('materialTypeLabel', mssql_1.default.NVarChar(120), input.materialType === 'other' ? input.materialTypeLabel?.trim() || null : null)
             .input('visibility', mssql_1.default.NVarChar(40), input.visibility ?? 'public')
             .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
             .input('isActive', mssql_1.default.Bit, input.isActive ?? true)
@@ -1354,12 +1357,13 @@ class RegistrationsRepository {
             .input('userId', mssql_1.default.UniqueIdentifier, input.userId ?? null)
             .query(`
         INSERT INTO dbo.event_materials (
-          event_id, file_id, program_id, title, description, material_type, visibility, registration_type_id, is_active, sort_order, created_by
+          event_id, file_id, program_id, title, description, material_type, material_type_label, visibility, registration_type_id, is_active, sort_order, created_by
         )
         OUTPUT INSERTED.id, INSERTED.event_id AS eventId, INSERTED.file_id AS fileId, INSERTED.program_id AS programId,
-          INSERTED.title, INSERTED.description, INSERTED.material_type AS materialType, INSERTED.visibility, INSERTED.registration_type_id AS registrationTypeId,
+          INSERTED.title, INSERTED.description, INSERTED.material_type AS materialType, INSERTED.material_type_label AS materialTypeLabel,
+          INSERTED.visibility, INSERTED.registration_type_id AS registrationTypeId,
           INSERTED.is_active AS isActive, INSERTED.sort_order AS sortOrder
-        VALUES (@eventId, @fileId, @programId, @title, @description, @materialType, @visibility, @registrationTypeId, @isActive, @sortOrder, @userId)
+        VALUES (@eventId, @fileId, @programId, @title, @description, @materialType, @materialTypeLabel, @visibility, @registrationTypeId, @isActive, @sortOrder, @userId)
       `);
         return result.recordset[0];
     }
@@ -1376,6 +1380,8 @@ class RegistrationsRepository {
             .input('description', mssql_1.default.NVarChar(500), input.description ?? null)
             .input('updateDescription', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'description'))
             .input('materialType', mssql_1.default.NVarChar(80), input.materialType ?? null)
+            .input('materialTypeLabel', mssql_1.default.NVarChar(120), input.materialTypeLabel?.trim() || null)
+            .input('updateMaterialTypeLabel', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'materialTypeLabel'))
             .input('visibility', mssql_1.default.NVarChar(40), input.visibility ?? null)
             .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
             .input('updateRegistrationTypeId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'registrationTypeId'))
@@ -1388,6 +1394,11 @@ class RegistrationsRepository {
             title = COALESCE(@title, title),
             description = CASE WHEN @updateDescription = 1 THEN @description ELSE description END,
             material_type = COALESCE(@materialType, material_type),
+            material_type_label = CASE
+              WHEN @materialType IS NOT NULL AND @materialType <> 'other' THEN NULL
+              WHEN @updateMaterialTypeLabel = 1 THEN @materialTypeLabel
+              ELSE material_type_label
+            END,
             visibility = COALESCE(@visibility, visibility),
             registration_type_id = CASE WHEN @updateRegistrationTypeId = 1 THEN @registrationTypeId ELSE registration_type_id END,
             is_active = COALESCE(@isActive, is_active),
@@ -1397,6 +1408,7 @@ class RegistrationsRepository {
 
         SELECT m.id, m.event_id AS eventId, m.file_id AS fileId, m.program_id AS programId,
           p.name AS programName, m.title, m.description, m.material_type AS materialType,
+          m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
           f.size_bytes AS sizeBytes
@@ -1525,6 +1537,71 @@ class RegistrationsRepository {
       SELECT @issued AS issued;
     `);
         return result.recordset[0]?.issued ?? 0;
+    }
+    async listMyCertificates(userId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool
+            .request()
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .query(`
+        SELECT certificate.id, certificate.event_id AS eventId,
+          certificate.registration_id AS registrationId, certificate.template_id AS templateId,
+          certificate.certificate_code AS certificateCode, certificate.recipient_name AS recipientName,
+          certificate.recipient_email AS recipientEmail, certificate.recipient_role AS recipientRole,
+          certificate.status, certificate.available_at AS availableAt, certificate.issued_at AS issuedAt,
+          template.name AS templateName, template.certificate_type AS certificateType,
+          template.background_file_id AS backgroundFileId, file_record.mime_type AS backgroundMimeType,
+          template.content_json AS contentJson, event.name AS eventName,
+          event.starts_at AS eventStartsAt, event.ends_at AS eventEndsAt,
+          program.name AS programName, registration_type.name AS registrationTypeName,
+          profile.institution, agenda.title AS agendaItemTitle,
+          agenda.starts_at AS agendaStartsAt, agenda.ends_at AS agendaEndsAt,
+          accepted_submission.title AS presentationTitle
+        FROM dbo.event_certificates certificate
+        INNER JOIN dbo.event_registrations registration ON registration.id = certificate.registration_id
+        INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
+        INNER JOIN dbo.events event ON event.id = certificate.event_id
+        INNER JOIN dbo.event_registration_types registration_type ON registration_type.id = registration.registration_type_id
+        INNER JOIN dbo.event_certificate_templates template ON template.id = certificate.template_id
+        LEFT JOIN dbo.files file_record ON file_record.id = template.background_file_id
+        LEFT JOIN dbo.event_programs program ON program.id = registration.program_id
+        LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id
+        OUTER APPLY (
+          SELECT TOP 1 submission.title
+          FROM dbo.submissions submission
+          WHERE submission.registration_id = registration.id
+            AND submission.deleted_at IS NULL
+            AND submission.status = 'accepted'
+          ORDER BY submission.updated_at DESC
+        ) accepted_submission
+        WHERE registration.user_id = @userId
+          AND certificate.status = 'issued'
+          AND COALESCE(certificate.available_at, certificate.issued_at) <= SYSUTCDATETIME()
+        ORDER BY COALESCE(certificate.available_at, certificate.issued_at) DESC, certificate.issued_at DESC
+      `);
+        return result.recordset.map((row) => ({
+            ...row,
+            content: parseJson(row.contentJson ?? '{}', {}),
+        }));
+    }
+    async findMyCertificateBackgroundFileId(certificateId, userId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool
+            .request()
+            .input('certificateId', mssql_1.default.UniqueIdentifier, certificateId)
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .query(`
+        SELECT TOP 1 template.background_file_id AS backgroundFileId
+        FROM dbo.event_certificates certificate
+        INNER JOIN dbo.event_registrations registration ON registration.id = certificate.registration_id
+        INNER JOIN dbo.event_certificate_templates template ON template.id = certificate.template_id
+        WHERE certificate.id = @certificateId
+          AND registration.user_id = @userId
+          AND certificate.status = 'issued'
+          AND COALESCE(certificate.available_at, certificate.issued_at) <= SYSUTCDATETIME()
+          AND template.background_file_id IS NOT NULL
+      `);
+        return result.recordset[0]?.backgroundFileId ?? null;
     }
     async listCertificateTemplates(eventId) {
         const pool = await (0, database_1.getSqlPool)();

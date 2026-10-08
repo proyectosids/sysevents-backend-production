@@ -129,6 +129,70 @@ class IamRepository {
       `);
         return result.recordset[0] ? mapUser(result.recordset[0]) : null;
     }
+    async createPasswordResetToken(input) {
+        const pool = await (0, database_1.getSqlPool)();
+        await pool
+            .request()
+            .input('userId', mssql_1.default.UniqueIdentifier, input.userId)
+            .input('tokenHash', mssql_1.default.NVarChar(64), input.tokenHash)
+            .input('expiresAt', mssql_1.default.DateTime2, input.expiresAt)
+            .query(`
+        UPDATE dbo.password_reset_tokens
+        SET used_at = SYSUTCDATETIME()
+        WHERE user_id = @userId AND used_at IS NULL;
+
+        INSERT INTO dbo.password_reset_tokens (user_id, token_hash, expires_at)
+        VALUES (@userId, @tokenHash, @expiresAt);
+      `);
+    }
+    async resetPasswordWithToken(tokenHash, passwordHash) {
+        const pool = await (0, database_1.getSqlPool)();
+        const transaction = pool.transaction();
+        await transaction.begin();
+        try {
+            const tokenResult = await transaction
+                .request()
+                .input('tokenHash', mssql_1.default.NVarChar(64), tokenHash)
+                .query(`
+          UPDATE dbo.password_reset_tokens WITH (UPDLOCK, ROWLOCK)
+          SET used_at = SYSUTCDATETIME()
+          OUTPUT INSERTED.user_id
+          WHERE token_hash = @tokenHash
+            AND used_at IS NULL
+            AND expires_at > SYSUTCDATETIME()
+        `);
+            const userId = tokenResult.recordset[0]?.user_id;
+            if (!userId) {
+                await transaction.rollback();
+                return false;
+            }
+            await transaction
+                .request()
+                .input('userId', mssql_1.default.UniqueIdentifier, userId)
+                .input('passwordHash', mssql_1.default.NVarChar(255), passwordHash)
+                .query(`
+          UPDATE dbo.users
+          SET password_hash = @passwordHash,
+              status = 'active',
+              updated_at = SYSUTCDATETIME()
+          WHERE id = @userId;
+
+          UPDATE dbo.password_reset_tokens
+          SET used_at = COALESCE(used_at, SYSUTCDATETIME())
+          WHERE user_id = @userId;
+
+          UPDATE dbo.refresh_tokens
+          SET revoked_at = SYSUTCDATETIME()
+          WHERE user_id = @userId AND revoked_at IS NULL;
+        `);
+            await transaction.commit();
+            return true;
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
     async listRoles() {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool.request().query('SELECT * FROM dbo.roles ORDER BY name ASC');

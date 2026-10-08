@@ -20,6 +20,7 @@ type EventMaterialRow = {
     title: string;
     description: string | null;
     materialType: string;
+    materialTypeLabel: string | null;
     visibility: string;
     registrationTypeId: string | null;
     isActive: boolean;
@@ -259,6 +260,7 @@ export declare class RegistrationsRepository {
         title: string;
         description?: string;
         materialType?: string;
+        materialTypeLabel?: string | null;
         visibility?: 'public' | 'registered' | 'registration_type';
         registrationTypeId?: string | null;
         isActive?: boolean;
@@ -271,6 +273,7 @@ export declare class RegistrationsRepository {
         title?: string;
         description?: string;
         materialType?: string;
+        materialTypeLabel?: string | null;
         visibility?: 'public' | 'registered' | 'registration_type';
         registrationTypeId?: string | null;
         isActive?: boolean;
@@ -292,6 +295,8 @@ export declare class RegistrationsRepository {
         certificateDelayMinutes: number;
     }>;
     issueDueCertificates(): Promise<number>;
+    listMyCertificates(userId: string): Promise<any[]>;
+    findMyCertificateBackgroundFileId(certificateId: string, userId: string): Promise<string>;
     listCertificateTemplates(eventId: string): Promise<any[]>;
     createCertificateTemplate(eventId: string, input: {
         registrationTypeId?: string | null;

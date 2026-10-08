@@ -7,11 +7,13 @@ exports.authRouter = void 0;
 const express_1 = require("express");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const crypto_1 = __importDefault(require("crypto"));
+const env_1 = require("../../../config/env");
 const app_error_1 = require("../../../shared/errors/app-error");
 const async_handler_1 = require("../../../shared/utils/async-handler");
 const api_response_1 = require("../../../shared/utils/api-response");
 const rate_limiters_1 = require("../../security/presentation/rate-limiters");
 const tenants_repository_1 = require("../../tenants/infrastructure/repositories/tenants.repository");
+const email_service_1 = require("../../communications/application/services/email.service");
 const tenant_schemas_1 = require("../../tenants/presentation/schemas/tenant.schemas");
 const auth_service_1 = require("../application/services/auth.service");
 const iam_repository_1 = require("../infrastructure/repositories/iam.repository");
@@ -21,6 +23,7 @@ exports.authRouter = (0, express_1.Router)();
 const authService = new auth_service_1.AuthService();
 const iamRepository = new iam_repository_1.IamRepository();
 const tenantsRepository = new tenants_repository_1.TenantsRepository();
+const emailService = new email_service_1.EmailService();
 function hashToken(token) {
     return crypto_1.default.createHash('sha256').update(token).digest('hex');
 }
@@ -64,6 +67,35 @@ exports.authRouter.post('/login', rate_limiters_1.loginRateLimiter, (0, async_ha
     const input = auth_schemas_1.loginSchema.parse(req.body);
     const session = await authService.login(input.email, input.password);
     return (0, api_response_1.sendSuccess)(res, 'Login successful', session);
+}));
+exports.authRouter.post('/forgot-password', rate_limiters_1.loginRateLimiter, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { email } = auth_schemas_1.forgotPasswordSchema.parse(req.body);
+    const user = await iamRepository.findUserByEmail(email);
+    if (user?.status === 'active') {
+        const token = crypto_1.default.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+        await iamRepository.createPasswordResetToken({
+            userId: user.id,
+            tokenHash: hashToken(token),
+            expiresAt,
+        });
+        const resetUrl = new URL('/reset-password', env_1.env.APP_PUBLIC_URL);
+        resetUrl.searchParams.set('token', token);
+        await emailService.sendTemplate('password_reset', user.email, {
+            name: user.firstName,
+            resetUrl: resetUrl.toString(),
+        });
+    }
+    return (0, api_response_1.sendSuccess)(res, 'If an active account exists for that email, password reset instructions were sent');
+}));
+exports.authRouter.post('/reset-password', rate_limiters_1.loginRateLimiter, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const input = auth_schemas_1.resetPasswordSchema.parse(req.body);
+    const passwordHash = await bcryptjs_1.default.hash(input.newPassword, 12);
+    const reset = await iamRepository.resetPasswordWithToken(hashToken(input.token), passwordHash);
+    if (!reset) {
+        throw new app_error_1.AppError('Password reset link is invalid or has expired', 410, 'PASSWORD_RESET_INVALID_OR_EXPIRED');
+    }
+    return (0, api_response_1.sendSuccess)(res, 'Password updated successfully');
 }));
 exports.authRouter.post('/refresh-token', (0, async_handler_1.asyncHandler)(async (req, res) => {
     const input = auth_schemas_1.refreshTokenSchema.parse(req.body);

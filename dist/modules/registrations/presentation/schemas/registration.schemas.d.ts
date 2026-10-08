@@ -27,6 +27,9 @@ export declare const certificateTemplateParamsSchema: z.ZodObject<{
     eventId: z.ZodString;
     templateId: z.ZodString;
 }, z.core.$strip>;
+export declare const certificateIdParamsSchema: z.ZodObject<{
+    certificateId: z.ZodString;
+}, z.core.$strip>;
 export declare const createRegistrationTypeSchema: z.ZodObject<{
     programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     name: z.ZodString;
@@ -162,8 +165,8 @@ export declare const createRegistrationFormFieldSchema: z.ZodObject<{
         email: "email";
         date: "date";
         file: "file";
-        phone: "phone";
         text: "text";
+        phone: "phone";
         textarea: "textarea";
         select: "select";
         checkbox: "checkbox";
@@ -188,8 +191,8 @@ export declare const updateRegistrationFormFieldSchema: z.ZodObject<{
         email: "email";
         date: "date";
         file: "file";
-        phone: "phone";
         text: "text";
+        phone: "phone";
         textarea: "textarea";
         select: "select";
         checkbox: "checkbox";
@@ -220,6 +223,7 @@ export declare const createEventMaterialSchema: z.ZodObject<{
         formato_resumen: "formato_resumen";
         reglamento: "reglamento";
     }>>;
+    materialTypeLabel: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     visibility: z.ZodOptional<z.ZodEnum<{
         registered: "registered";
         public: "public";
@@ -243,6 +247,7 @@ export declare const updateEventMaterialSchema: z.ZodObject<{
         formato_resumen: "formato_resumen";
         reglamento: "reglamento";
     }>>>;
+    materialTypeLabel: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     visibility: z.ZodOptional<z.ZodOptional<z.ZodEnum<{
         registered: "registered";
         public: "public";

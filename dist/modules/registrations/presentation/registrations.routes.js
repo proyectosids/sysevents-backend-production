@@ -380,4 +380,21 @@ exports.myRegistrationsRouter.get('/registrations', authenticate_middleware_1.au
     const registrations = await registrationsRepository.listMyRegistrations(req.user.id);
     return (0, api_response_1.sendSuccess)(res, 'My registrations retrieved successfully', registrations);
 }));
+exports.myRegistrationsRouter.get('/certificates', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    await registrationsRepository.issueDueCertificates();
+    const certificates = await registrationsRepository.listMyCertificates(req.user.id);
+    return (0, api_response_1.sendSuccess)(res, 'My certificates retrieved successfully', certificates);
+}));
+exports.myRegistrationsRouter.get('/certificates/:certificateId/background', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { certificateId } = registration_schemas_1.certificateIdParamsSchema.parse(req.params);
+    const backgroundFileId = await registrationsRepository.findMyCertificateBackgroundFileId(certificateId, req.user.id);
+    if (!backgroundFileId)
+        throw new app_error_1.AppError('Certificate not found', 404, 'CERTIFICATE_NOT_FOUND');
+    const file = await filesRepository.findById(backgroundFileId);
+    if (!file)
+        throw new app_error_1.AppError('Certificate background not found', 404, 'CERTIFICATE_BACKGROUND_NOT_FOUND');
+    res.type(file.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.originalName)}`);
+    return res.sendFile(fileStorageService.getAbsolutePath(file.storagePath));
+}));
 //# sourceMappingURL=registrations.routes.js.map

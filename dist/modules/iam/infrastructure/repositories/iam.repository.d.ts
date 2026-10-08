@@ -23,6 +23,12 @@ export declare class IamRepository {
     listUsers(): Promise<User[]>;
     updateUser(id: string, input: Partial<Pick<User, 'email' | 'firstName' | 'lastName' | 'status'>>): Promise<User | null>;
     updatePassword(id: string, passwordHash: string): Promise<User | null>;
+    createPasswordResetToken(input: {
+        userId: string;
+        tokenHash: string;
+        expiresAt: Date;
+    }): Promise<void>;
+    resetPasswordWithToken(tokenHash: string, passwordHash: string): Promise<boolean>;
     listRoles(): Promise<Role[]>;
     findRoleByName(name: string): Promise<Role | null>;
     createRole(input: {
