@@ -294,7 +294,7 @@ export declare class RegistrationsRepository {
         maxTeamMembers: number;
         certificateDelayMinutes: number;
     }>;
-    issueDueCertificates(): Promise<number>;
+    issueDueCertificatesForUser(userId: string): Promise<number>;
     listMyCertificates(userId: string): Promise<any[]>;
     findMyCertificateBackgroundFileId(certificateId: string, userId: string): Promise<string>;
     listCertificateTemplates(eventId: string): Promise<any[]>;
@@ -303,6 +303,8 @@ export declare class RegistrationsRepository {
         programId?: string | null;
         backgroundFileId?: string | null;
         agendaItemId?: string | null;
+        releaseTrigger?: 'agenda_item' | 'event_end';
+        eventEndAt?: Date | null;
         name: string;
         certificateType?: string;
         targetRole?: 'participant' | 'speaker' | 'keynote_speaker' | 'advisor' | 'team_member';
@@ -318,6 +320,8 @@ export declare class RegistrationsRepository {
         programId?: string | null;
         backgroundFileId?: string | null;
         agendaItemId?: string | null;
+        releaseTrigger?: 'agenda_item' | 'event_end';
+        eventEndAt?: Date | null;
         name?: string;
         certificateType?: string;
         targetRole?: 'participant' | 'speaker' | 'keynote_speaker' | 'advisor' | 'team_member';

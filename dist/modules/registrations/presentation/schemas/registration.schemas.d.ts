@@ -262,6 +262,11 @@ export declare const createCertificateTemplateSchema: z.ZodObject<{
     programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     backgroundFileId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agendaItemId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    releaseTrigger: z.ZodOptional<z.ZodEnum<{
+        agenda_item: "agenda_item";
+        event_end: "event_end";
+    }>>;
+    eventEndAt: z.ZodOptional<z.ZodNullable<z.ZodCoercedDate<unknown>>>;
     name: z.ZodString;
     certificateType: z.ZodDefault<z.ZodString>;
     targetRole: z.ZodOptional<z.ZodEnum<{
@@ -287,6 +292,11 @@ export declare const updateCertificateTemplateSchema: z.ZodObject<{
     programId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     backgroundFileId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     agendaItemId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
+    releaseTrigger: z.ZodOptional<z.ZodOptional<z.ZodEnum<{
+        agenda_item: "agenda_item";
+        event_end: "event_end";
+    }>>>;
+    eventEndAt: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodCoercedDate<unknown>>>>;
     name: z.ZodOptional<z.ZodString>;
     certificateType: z.ZodOptional<z.ZodDefault<z.ZodString>>;
     targetRole: z.ZodOptional<z.ZodOptional<z.ZodEnum<{

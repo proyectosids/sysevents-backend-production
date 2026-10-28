@@ -1465,9 +1465,11 @@ class RegistrationsRepository {
       `);
         return input;
     }
-    async issueDueCertificates() {
+    async issueDueCertificatesForUser(userId) {
         const pool = await (0, database_1.getSqlPool)();
-        const result = await pool.request().query(`
+        const result = await pool.request()
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .query(`
       DECLARE @issued INT = 0;
 
       INSERT INTO dbo.event_certificates (
@@ -1477,24 +1479,32 @@ class RegistrationsRepository {
       SELECT template.event_id, registration.id, template.id,
         CONCAT('SYSEVENTS-', UPPER(LEFT(REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', ''), 20))),
         CONCAT(profile.first_name, ' ', profile.last_name), profile.email, template.target_role,
-        DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)), SYSUTCDATETIME()
+        DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at), SYSUTCDATETIME()
       FROM dbo.event_certificate_templates template
-      INNER JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
+      LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
+      CROSS APPLY (
+        SELECT CASE
+          WHEN template.release_trigger = 'event_end' THEN template.event_end_at
+          ELSE COALESCE(agenda.ends_at, agenda.starts_at)
+        END AS ends_at
+      ) release_time
       INNER JOIN dbo.event_settings settings ON settings.event_id = template.event_id
       INNER JOIN dbo.event_registrations registration ON registration.event_id = template.event_id
         AND (template.program_id IS NULL OR template.program_id = registration.program_id)
         AND (template.registration_type_id IS NULL OR template.registration_type_id = registration.registration_type_id)
+        AND registration.user_id = @userId
       INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
       LEFT JOIN dbo.event_speakers speaker ON speaker.source_registration_id = registration.id AND speaker.deleted_at IS NULL
       WHERE template.deleted_at IS NULL AND template.is_active = 1 AND template.auto_issue = 1
         AND template.target_role IN ('participant','speaker','keynote_speaker')
         AND registration.status IN ('confirmed','checked_in')
-        AND DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)) <= SYSUTCDATETIME()
+        AND release_time.ends_at IS NOT NULL
+        AND DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at) <= SYSUTCDATETIME()
         AND (template.target_role = 'participant'
           OR (template.target_role = 'speaker' AND speaker.id IS NOT NULL)
           OR (template.target_role = 'keynote_speaker' AND speaker.id IS NOT NULL
-            AND (LOWER(COALESCE(agenda.speaker_role, '')) LIKE '%magistral%'
-              OR LOWER(COALESCE(agenda.speaker_role, '')) LIKE '%keynote%')))
+            AND (LOWER(COALESCE(agenda.speaker_role, speaker.role, '')) LIKE '%magistral%'
+              OR LOWER(COALESCE(agenda.speaker_role, speaker.role, '')) LIKE '%keynote%')))
         AND (agenda.speaker_email IS NULL OR template.target_role = 'participant' OR LOWER(agenda.speaker_email) = LOWER(profile.email))
         AND (agenda.speaker_id IS NULL OR template.target_role = 'participant' OR agenda.speaker_id = speaker.id)
         AND NOT EXISTS (
@@ -1511,13 +1521,20 @@ class RegistrationsRepository {
       SELECT template.event_id, registration.id, template.id,
         CONCAT('SYSEVENTS-', UPPER(LEFT(REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', ''), 20))),
         member.full_name, member.email, template.target_role,
-        DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)), SYSUTCDATETIME()
+        DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at), SYSUTCDATETIME()
       FROM dbo.event_certificate_templates template
-      INNER JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
+      LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
+      CROSS APPLY (
+        SELECT CASE
+          WHEN template.release_trigger = 'event_end' THEN template.event_end_at
+          ELSE COALESCE(agenda.ends_at, agenda.starts_at)
+        END AS ends_at
+      ) release_time
       INNER JOIN dbo.event_settings settings ON settings.event_id = template.event_id
       INNER JOIN dbo.event_registrations registration ON registration.event_id = template.event_id
         AND (template.program_id IS NULL OR template.program_id = registration.program_id)
         AND (template.registration_type_id IS NULL OR template.registration_type_id = registration.registration_type_id)
+        AND registration.user_id = @userId
       INNER JOIN dbo.event_registration_team_members member ON member.registration_id = registration.id
         AND member.role = CASE WHEN template.target_role = 'advisor' THEN 'advisor' ELSE 'team_member' END
       INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
@@ -1525,7 +1542,8 @@ class RegistrationsRepository {
       WHERE template.deleted_at IS NULL AND template.is_active = 1 AND template.auto_issue = 1
         AND template.target_role IN ('advisor','team_member')
         AND registration.status IN ('confirmed','checked_in')
-        AND DATEADD(MINUTE, settings.certificate_delay_minutes, COALESCE(agenda.ends_at, agenda.starts_at)) <= SYSUTCDATETIME()
+        AND release_time.ends_at IS NOT NULL
+        AND DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at) <= SYSUTCDATETIME()
         AND (agenda.speaker_email IS NULL OR LOWER(agenda.speaker_email) = LOWER(profile.email))
         AND (agenda.speaker_id IS NULL OR agenda.speaker_id = speaker.id)
         AND NOT EXISTS (
@@ -1535,7 +1553,7 @@ class RegistrationsRepository {
         );
       SET @issued += @@ROWCOUNT;
       SELECT @issued AS issued;
-    `);
+      `);
         return result.recordset[0]?.issued ?? 0;
     }
     async listMyCertificates(userId) {
@@ -1612,6 +1630,7 @@ class RegistrationsRepository {
         SELECT template.id, template.event_id AS eventId, template.registration_type_id AS registrationTypeId,
           template.program_id AS programId, program.name AS programName, template.background_file_id AS backgroundFileId,
           template.agenda_item_id AS agendaItemId, agenda.title AS agendaItemTitle,
+          template.release_trigger AS releaseTrigger, template.event_end_at AS eventEndAt,
           file_record.original_name AS backgroundOriginalName, file_record.mime_type AS backgroundMimeType,
           template.name, template.certificate_type AS certificateType, template.target_role AS targetRole,
           template.recipient_source AS recipientSource, template.content_json AS contentJson,
@@ -1633,7 +1652,9 @@ class RegistrationsRepository {
             .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
             .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
             .input('backgroundFileId', mssql_1.default.UniqueIdentifier, input.backgroundFileId ?? null)
-            .input('agendaItemId', mssql_1.default.UniqueIdentifier, input.agendaItemId ?? null)
+            .input('releaseTrigger', mssql_1.default.NVarChar(30), input.releaseTrigger ?? 'agenda_item')
+            .input('agendaItemId', mssql_1.default.UniqueIdentifier, input.releaseTrigger === 'event_end' ? null : input.agendaItemId ?? null)
+            .input('eventEndAt', mssql_1.default.DateTime2, input.releaseTrigger === 'event_end' ? input.eventEndAt ?? null : null)
             .input('name', mssql_1.default.NVarChar(160), input.name)
             .input('certificateType', mssql_1.default.NVarChar(60), input.certificateType ?? 'participant')
             .input('targetRole', mssql_1.default.NVarChar(40), input.targetRole ?? input.certificateType ?? 'participant')
@@ -1645,16 +1666,17 @@ class RegistrationsRepository {
             .input('userId', mssql_1.default.UniqueIdentifier, input.userId ?? null)
             .query(`
         INSERT INTO dbo.event_certificate_templates (
-          event_id, registration_type_id, program_id, background_file_id, agenda_item_id, name, certificate_type,
+          event_id, registration_type_id, program_id, background_file_id, agenda_item_id, release_trigger, event_end_at, name, certificate_type,
           target_role, recipient_source, content_json, is_active, auto_issue, sort_order, created_by
         )
         OUTPUT INSERTED.id, INSERTED.event_id AS eventId, INSERTED.registration_type_id AS registrationTypeId,
           INSERTED.program_id AS programId, INSERTED.background_file_id AS backgroundFileId, INSERTED.agenda_item_id AS agendaItemId,
+          INSERTED.release_trigger AS releaseTrigger, INSERTED.event_end_at AS eventEndAt,
           INSERTED.name, INSERTED.certificate_type AS certificateType, INSERTED.target_role AS targetRole,
           INSERTED.recipient_source AS recipientSource, INSERTED.content_json AS contentJson,
           INSERTED.is_active AS isActive, INSERTED.auto_issue AS autoIssue, INSERTED.sort_order AS sortOrder
         VALUES (
-          @eventId, @registrationTypeId, @programId, @backgroundFileId, @agendaItemId, @name, @certificateType,
+          @eventId, @registrationTypeId, @programId, @backgroundFileId, @agendaItemId, @releaseTrigger, @eventEndAt, @name, @certificateType,
           @targetRole, @recipientSource, @contentJson, @isActive, @autoIssue, @sortOrder, @userId
         )
       `);
@@ -1673,8 +1695,11 @@ class RegistrationsRepository {
             .input('updateProgramId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'programId'))
             .input('backgroundFileId', mssql_1.default.UniqueIdentifier, input.backgroundFileId ?? null)
             .input('updateBackgroundFileId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'backgroundFileId'))
-            .input('agendaItemId', mssql_1.default.UniqueIdentifier, input.agendaItemId ?? null)
+            .input('releaseTrigger', mssql_1.default.NVarChar(30), input.releaseTrigger ?? null)
+            .input('agendaItemId', mssql_1.default.UniqueIdentifier, input.releaseTrigger === 'event_end' ? null : input.agendaItemId ?? null)
             .input('updateAgendaItemId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'agendaItemId'))
+            .input('eventEndAt', mssql_1.default.DateTime2, input.releaseTrigger === 'event_end' ? input.eventEndAt ?? null : null)
+            .input('updateEventEndAt', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'eventEndAt'))
             .input('name', mssql_1.default.NVarChar(160), input.name ?? null)
             .input('certificateType', mssql_1.default.NVarChar(60), input.certificateType ?? null)
             .input('targetRole', mssql_1.default.NVarChar(40), input.targetRole ?? null)
@@ -1688,7 +1713,17 @@ class RegistrationsRepository {
         SET registration_type_id = CASE WHEN @updateRegistrationTypeId = 1 THEN @registrationTypeId ELSE registration_type_id END,
             program_id = CASE WHEN @updateProgramId = 1 THEN @programId ELSE program_id END,
             background_file_id = CASE WHEN @updateBackgroundFileId = 1 THEN @backgroundFileId ELSE background_file_id END,
-            agenda_item_id = CASE WHEN @updateAgendaItemId = 1 THEN @agendaItemId ELSE agenda_item_id END,
+            release_trigger = COALESCE(@releaseTrigger, release_trigger),
+            agenda_item_id = CASE
+              WHEN @releaseTrigger = 'event_end' THEN NULL
+              WHEN @updateAgendaItemId = 1 THEN @agendaItemId
+              ELSE agenda_item_id
+            END,
+            event_end_at = CASE
+              WHEN @releaseTrigger = 'agenda_item' THEN NULL
+              WHEN @updateEventEndAt = 1 THEN @eventEndAt
+              ELSE event_end_at
+            END,
             name = COALESCE(@name, name),
             certificate_type = COALESCE(@certificateType, certificate_type),
             target_role = COALESCE(@targetRole, target_role),
@@ -1703,6 +1738,7 @@ class RegistrationsRepository {
         SELECT template.id, template.event_id AS eventId, template.registration_type_id AS registrationTypeId,
           template.program_id AS programId, program.name AS programName, template.background_file_id AS backgroundFileId,
           template.agenda_item_id AS agendaItemId, agenda.title AS agendaItemTitle,
+          template.release_trigger AS releaseTrigger, template.event_end_at AS eventEndAt,
           file_record.original_name AS backgroundOriginalName, file_record.mime_type AS backgroundMimeType,
           template.name, template.certificate_type AS certificateType, template.target_role AS targetRole,
           template.recipient_source AS recipientSource, template.content_json AS contentJson,

@@ -155,11 +155,13 @@ exports.createEventMaterialSchema = zod_1.z.object({
     sortOrder: zod_1.z.number().int().min(0).optional(),
 });
 exports.updateEventMaterialSchema = exports.createEventMaterialSchema.partial();
-exports.createCertificateTemplateSchema = zod_1.z.object({
+const certificateTemplateSchema = zod_1.z.object({
     registrationTypeId: zod_1.z.string().uuid().nullable().optional(),
     programId: zod_1.z.string().uuid().nullable().optional(),
     backgroundFileId: zod_1.z.string().uuid().nullable().optional(),
     agendaItemId: zod_1.z.string().uuid().nullable().optional(),
+    releaseTrigger: zod_1.z.enum(['agenda_item', 'event_end']).optional(),
+    eventEndAt: zod_1.z.coerce.date().nullable().optional(),
     name: zod_1.z.string().min(2).max(160),
     certificateType: zod_1.z.string().min(2).max(60).default('participant'),
     targetRole: zod_1.z.enum(['participant', 'speaker', 'keynote_speaker', 'advisor', 'team_member']).optional(),
@@ -169,7 +171,19 @@ exports.createCertificateTemplateSchema = zod_1.z.object({
     autoIssue: zod_1.z.boolean().optional(),
     sortOrder: zod_1.z.number().int().min(0).optional(),
 });
-exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema.partial();
+function validateCertificateRelease(input, context) {
+    if (input.autoIssue === false)
+        return;
+    const releaseTrigger = input.releaseTrigger ?? 'agenda_item';
+    if (releaseTrigger === 'agenda_item' && !input.agendaItemId) {
+        context.addIssue({ code: 'custom', path: ['agendaItemId'], message: 'Select an agenda item for automatic issuance' });
+    }
+    if (releaseTrigger === 'event_end' && !input.eventEndAt) {
+        context.addIssue({ code: 'custom', path: ['eventEndAt'], message: 'Set the event end date for automatic issuance' });
+    }
+}
+exports.createCertificateTemplateSchema = certificateTemplateSchema.superRefine(validateCertificateRelease);
+exports.updateCertificateTemplateSchema = certificateTemplateSchema.partial().superRefine(validateCertificateRelease);
 exports.issueCertificateSchema = zod_1.z.object({
     registrationId: zod_1.z.string().uuid(),
 });

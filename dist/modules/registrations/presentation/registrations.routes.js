@@ -305,7 +305,6 @@ exports.registrationsRouter.patch('/:eventId/team-certificate-settings', authent
 }));
 exports.registrationsRouter.get('/:eventId/certificate-templates', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('certificates.read'), (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = registration_schemas_1.registrationEventParamsSchema.parse(req.params);
-    await registrationsRepository.issueDueCertificates();
     const templates = await registrationsRepository.listCertificateTemplates(eventId);
     return (0, api_response_1.sendSuccess)(res, 'Certificate templates retrieved successfully', templates);
 }));
@@ -381,9 +380,12 @@ exports.myRegistrationsRouter.get('/registrations', authenticate_middleware_1.au
     return (0, api_response_1.sendSuccess)(res, 'My registrations retrieved successfully', registrations);
 }));
 exports.myRegistrationsRouter.get('/certificates', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
-    await registrationsRepository.issueDueCertificates();
     const certificates = await registrationsRepository.listMyCertificates(req.user.id);
     return (0, api_response_1.sendSuccess)(res, 'My certificates retrieved successfully', certificates);
+}));
+exports.myRegistrationsRouter.post('/certificates/generate', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const issued = await registrationsRepository.issueDueCertificatesForUser(req.user.id);
+    return (0, api_response_1.sendSuccess)(res, 'Available certificates generated successfully', { issued });
 }));
 exports.myRegistrationsRouter.get('/certificates/:certificateId/background', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { certificateId } = registration_schemas_1.certificateIdParamsSchema.parse(req.params);
