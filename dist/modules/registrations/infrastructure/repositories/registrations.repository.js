@@ -1623,6 +1623,16 @@ class RegistrationsRepository {
     }
     async listCertificateTemplates(eventId) {
         const pool = await (0, database_1.getSqlPool)();
+        const schemaResult = await pool.request().query(`
+      SELECT CAST(CASE
+        WHEN COL_LENGTH('dbo.event_certificate_templates', 'release_trigger') IS NOT NULL
+         AND COL_LENGTH('dbo.event_certificate_templates', 'event_end_at') IS NOT NULL
+        THEN 1 ELSE 0 END AS BIT) AS hasReleaseColumns
+    `);
+        const hasReleaseColumns = schemaResult.recordset[0]?.hasReleaseColumns === true;
+        const releaseColumns = hasReleaseColumns
+            ? 'template.release_trigger AS releaseTrigger, template.event_end_at AS eventEndAt,'
+            : "CAST('agenda_item' AS NVARCHAR(30)) AS releaseTrigger, CAST(NULL AS DATETIME2) AS eventEndAt,";
         const result = await pool
             .request()
             .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
@@ -1630,7 +1640,7 @@ class RegistrationsRepository {
         SELECT template.id, template.event_id AS eventId, template.registration_type_id AS registrationTypeId,
           template.program_id AS programId, program.name AS programName, template.background_file_id AS backgroundFileId,
           template.agenda_item_id AS agendaItemId, agenda.title AS agendaItemTitle,
-          template.release_trigger AS releaseTrigger, template.event_end_at AS eventEndAt,
+          ${releaseColumns}
           file_record.original_name AS backgroundOriginalName, file_record.mime_type AS backgroundMimeType,
           template.name, template.certificate_type AS certificateType, template.target_role AS targetRole,
           template.recipient_source AS recipientSource, template.content_json AS contentJson,

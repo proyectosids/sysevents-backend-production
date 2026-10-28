@@ -183,7 +183,13 @@ function validateCertificateRelease(input, context) {
     }
 }
 exports.createCertificateTemplateSchema = certificateTemplateSchema.superRefine(validateCertificateRelease);
-exports.updateCertificateTemplateSchema = certificateTemplateSchema.partial().superRefine(validateCertificateRelease);
+exports.updateCertificateTemplateSchema = certificateTemplateSchema.partial().superRefine((input, context) => {
+    // Partial updates such as saving only the visual design must preserve the
+    // existing release configuration instead of requiring it in every request.
+    if (input.releaseTrigger === undefined)
+        return;
+    validateCertificateRelease(input, context);
+});
 exports.issueCertificateSchema = zod_1.z.object({
     registrationId: zod_1.z.string().uuid(),
 });

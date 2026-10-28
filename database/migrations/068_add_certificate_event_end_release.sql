@@ -14,9 +14,12 @@ IF NOT EXISTS (
   SELECT 1
   FROM sys.check_constraints
   WHERE name = 'ck_event_certificate_templates_release_trigger'
+    AND parent_object_id = OBJECT_ID('dbo.event_certificate_templates')
 )
 BEGIN
-  ALTER TABLE dbo.event_certificate_templates
-    ADD CONSTRAINT ck_event_certificate_templates_release_trigger
-      CHECK (release_trigger IN ('agenda_item', 'event_end'));
+  EXEC sys.sp_executesql N'
+    ALTER TABLE dbo.event_certificate_templates
+      ADD CONSTRAINT ck_event_certificate_templates_release_trigger
+        CHECK (release_trigger IN (''agenda_item'', ''event_end''));
+  ';
 END;
