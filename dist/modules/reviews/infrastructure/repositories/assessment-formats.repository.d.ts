@@ -41,6 +41,7 @@ export declare class AssessmentFormatsRepository {
         versionId: string;
     }>;
     archive(eventId: string, formatId: string): Promise<boolean>;
+    remove(eventId: string, formatId: string): Promise<boolean>;
     duplicate(eventId: string, formatId: string, userId: string): Promise<{
         id: string;
         versionId: string;

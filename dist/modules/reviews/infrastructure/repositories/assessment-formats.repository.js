@@ -158,6 +158,36 @@ class AssessmentFormatsRepository {
         const result = await pool.request().input('eventId', mssql_1.default.UniqueIdentifier, eventId).input('formatId', mssql_1.default.UniqueIdentifier, formatId).query(`UPDATE dbo.event_assessment_formats SET status='archived',updated_at=SYSUTCDATETIME() WHERE id=@formatId AND event_id=@eventId; SELECT @@ROWCOUNT AS affected;`);
         return Number(result.recordset[0]?.affected ?? 0) > 0;
     }
+    async remove(eventId, formatId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const transaction = pool.transaction();
+        await transaction.begin();
+        try {
+            const format = await transaction.request().input('eventId', mssql_1.default.UniqueIdentifier, eventId).input('formatId', mssql_1.default.UniqueIdentifier, formatId).query('SELECT id FROM dbo.event_assessment_formats WHERE id=@formatId AND event_id=@eventId');
+            if (!format.recordset[0])
+                throw new app_error_1.AppError('Formato no encontrado.', 404, 'ASSESSMENT_FORMAT_NOT_FOUND');
+            const usage = await transaction.request().input('formatId', mssql_1.default.UniqueIdentifier, formatId).query(`
+        SELECT
+          (SELECT COUNT(1) FROM dbo.review_assignments assignment INNER JOIN dbo.event_assessment_format_versions version ON version.id=assignment.assessment_format_version_id WHERE version.format_id=@formatId)
+          + (SELECT COUNT(1) FROM dbo.event_evaluator_assignments assignment INNER JOIN dbo.event_assessment_format_versions version ON version.id=assignment.assessment_format_version_id WHERE version.format_id=@formatId) AS assignments,
+          (SELECT COUNT(1) FROM dbo.assessment_responses response INNER JOIN dbo.event_assessment_format_versions version ON version.id=response.format_version_id WHERE version.format_id=@formatId) AS responses;
+      `);
+            if ((usage.recordset[0]?.assignments ?? 0) > 0 || (usage.recordset[0]?.responses ?? 0) > 0) {
+                throw new app_error_1.AppError('Este formato ya tiene asignaciones o respuestas. Archívalo para impedir nuevos usos sin perder el historial.', 409, 'ASSESSMENT_FORMAT_IN_USE');
+            }
+            await transaction.request().input('formatId', mssql_1.default.UniqueIdentifier, formatId).query(`
+        DELETE FROM dbo.event_assessment_format_scopes WHERE format_id=@formatId;
+        DELETE FROM dbo.event_assessment_format_versions WHERE format_id=@formatId;
+        DELETE FROM dbo.event_assessment_formats WHERE id=@formatId;
+      `);
+            await transaction.commit();
+            return true;
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
     async duplicate(eventId, formatId, userId) {
         const pool = await (0, database_1.getSqlPool)();
         const source = await pool.request().input('eventId', mssql_1.default.UniqueIdentifier, eventId).input('formatId', mssql_1.default.UniqueIdentifier, formatId).query(`

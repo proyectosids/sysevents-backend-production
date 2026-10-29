@@ -96,6 +96,12 @@ exports.assessmentFormatsRouter.post('/events/:eventId/assessment-formats/:forma
         throw new app_error_1.AppError('Formato no encontrado.', 404, 'ASSESSMENT_FORMAT_NOT_FOUND');
     return (0, api_response_1.sendSuccess)(res, 'Formato archivado.');
 }));
+exports.assessmentFormatsRouter.delete('/events/:eventId/assessment-formats/:formatId', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId, formatId } = assessment_schemas_1.assessmentFormatParamsSchema.parse(req.params);
+    await requireEventAccess(eventId, req.user.id, req.user.permissions, true);
+    await repository.remove(eventId, formatId);
+    return (0, api_response_1.sendSuccess)(res, 'Formato eliminado.');
+}));
 exports.assessmentFormatsRouter.post('/events/:eventId/assessment-formats/preview', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = assessment_schemas_1.assessmentEventParamsSchema.parse(req.params);
     const input = assessment_schemas_1.assessmentPreviewSchema.parse(req.body);
