@@ -114,6 +114,7 @@ exports.reviewsRouter.post('/submissions/:id/assign-reviewer', authenticate_midd
         reviewTeamId: input.teamId,
         reviewerUserId: input.reviewerUserId,
         rubricId: input.rubricId,
+        assessmentFormatVersionId: input.assessmentFormatVersionId,
         dueAt: input.dueAt,
         assignedBy: req.user.id,
     });

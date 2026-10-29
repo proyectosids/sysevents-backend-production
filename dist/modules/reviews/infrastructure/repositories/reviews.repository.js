@@ -244,11 +244,12 @@ class ReviewsRepository {
                 .input('reviewerUserId', mssql_1.default.UniqueIdentifier, input.reviewerUserId)
                 .input('assignedBy', mssql_1.default.UniqueIdentifier, input.assignedBy)
                 .input('rubricId', mssql_1.default.UniqueIdentifier, input.rubricId ?? null)
+                .input('assessmentFormatVersionId', mssql_1.default.UniqueIdentifier, input.assessmentFormatVersionId ?? null)
                 .input('dueAt', mssql_1.default.DateTime2, input.dueAt ?? null)
                 .query(`
-          INSERT INTO dbo.review_assignments (submission_id, review_team_id, reviewer_user_id, assigned_by, rubric_id, due_at)
+          INSERT INTO dbo.review_assignments (submission_id, review_team_id, reviewer_user_id, assigned_by, rubric_id, due_at, assessment_format_version_id)
           OUTPUT INSERTED.*
-          VALUES (@submissionId, @reviewTeamId, @reviewerUserId, @assignedBy, @rubricId, @dueAt)
+          VALUES (@submissionId, @reviewTeamId, @reviewerUserId, @assignedBy, @rubricId, @dueAt, @assessmentFormatVersionId)
         `);
             await transaction.request()
                 .input('assignmentId', mssql_1.default.UniqueIdentifier, result.recordset[0].id)

@@ -1,0 +1,359 @@
+import { z } from 'zod';
+export declare const assessmentDefinitionSchema: z.ZodObject<{
+    schemaVersion: z.ZodLiteral<1>;
+    sections: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodOptional<z.ZodString>;
+        feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+        fields: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            label: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            type: z.ZodEnum<{
+                number: "number";
+                short_text: "short_text";
+                long_text: "long_text";
+                single_choice: "single_choice";
+                scale: "scale";
+                matrix: "matrix";
+            }>;
+            required: z.ZodOptional<z.ZodBoolean>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+            min: z.ZodOptional<z.ZodNumber>;
+            max: z.ZodOptional<z.ZodNumber>;
+            decimals: z.ZodOptional<z.ZodNumber>;
+            options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                value: z.ZodNullable<z.ZodNumber>;
+                feedbackLabel: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>>;
+            rows: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                required: z.ZodOptional<z.ZodBoolean>;
+                observationRequired: z.ZodOptional<z.ZodBoolean>;
+            }, z.core.$strip>>>;
+            observation: z.ZodOptional<z.ZodObject<{
+                enabled: z.ZodBoolean;
+                required: z.ZodOptional<z.ZodBoolean>;
+                requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>;
+    calculations: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        label: z.ZodString;
+        formula: z.ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>;
+        decimals: z.ZodOptional<z.ZodNumber>;
+        feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strip>>>;
+    outcomeRules: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        sourceId: z.ZodString;
+        operator: z.ZodEnum<{
+            eq: "eq";
+            neq: "neq";
+            gt: "gt";
+            gte: "gte";
+            lt: "lt";
+            lte: "lte";
+        }>;
+        value: z.ZodNumber;
+        recommendation: z.ZodEnum<{
+            changes_requested: "changes_requested";
+            accept: "accept";
+            reject: "reject";
+        }>;
+        priority: z.ZodOptional<z.ZodNumber>;
+    }, z.core.$strip>>>;
+    generalComments: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodBoolean;
+        required: z.ZodOptional<z.ZodBoolean>;
+        feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+        label: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export declare const assessmentEventParamsSchema: z.ZodObject<{
+    eventId: z.ZodString;
+}, z.core.$strip>;
+export declare const assessmentFormatParamsSchema: z.ZodObject<{
+    eventId: z.ZodString;
+    formatId: z.ZodString;
+}, z.core.$strip>;
+export declare const assessmentVersionParamsSchema: z.ZodObject<{
+    eventId: z.ZodString;
+    formatId: z.ZodString;
+    versionId: z.ZodString;
+}, z.core.$strip>;
+export declare const assessmentAssignmentParamsSchema: z.ZodObject<{
+    kind: z.ZodEnum<{
+        review: "review";
+        evaluation: "evaluation";
+    }>;
+    assignmentId: z.ZodString;
+}, z.core.$strip>;
+export declare const createAssessmentFormatSchema: z.ZodObject<{
+    name: z.ZodString;
+    purpose: z.ZodEnum<{
+        review: "review";
+        evaluation: "evaluation";
+    }>;
+    instructions: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    scopes: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        submissionTypeId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.core.$strip>>>;
+    definition: z.ZodObject<{
+        schemaVersion: z.ZodLiteral<1>;
+        sections: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+            fields: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                description: z.ZodOptional<z.ZodString>;
+                type: z.ZodEnum<{
+                    number: "number";
+                    short_text: "short_text";
+                    long_text: "long_text";
+                    single_choice: "single_choice";
+                    scale: "scale";
+                    matrix: "matrix";
+                }>;
+                required: z.ZodOptional<z.ZodBoolean>;
+                feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+                min: z.ZodOptional<z.ZodNumber>;
+                max: z.ZodOptional<z.ZodNumber>;
+                decimals: z.ZodOptional<z.ZodNumber>;
+                options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    id: z.ZodString;
+                    label: z.ZodString;
+                    value: z.ZodNullable<z.ZodNumber>;
+                    feedbackLabel: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+                rows: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    id: z.ZodString;
+                    label: z.ZodString;
+                    required: z.ZodOptional<z.ZodBoolean>;
+                    observationRequired: z.ZodOptional<z.ZodBoolean>;
+                }, z.core.$strip>>>;
+                observation: z.ZodOptional<z.ZodObject<{
+                    enabled: z.ZodBoolean;
+                    required: z.ZodOptional<z.ZodBoolean>;
+                    requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                }, z.core.$strip>>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        calculations: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            label: z.ZodString;
+            formula: z.ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>;
+            decimals: z.ZodOptional<z.ZodNumber>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strip>>>;
+        outcomeRules: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            sourceId: z.ZodString;
+            operator: z.ZodEnum<{
+                eq: "eq";
+                neq: "neq";
+                gt: "gt";
+                gte: "gte";
+                lt: "lt";
+                lte: "lte";
+            }>;
+            value: z.ZodNumber;
+            recommendation: z.ZodEnum<{
+                changes_requested: "changes_requested";
+                accept: "accept";
+                reject: "reject";
+            }>;
+            priority: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>>>;
+        generalComments: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            required: z.ZodOptional<z.ZodBoolean>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+            label: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    printableTemplateFileId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, z.core.$strip>;
+export declare const updateAssessmentFormatSchema: z.ZodObject<{
+    name: z.ZodOptional<z.ZodString>;
+    instructions: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
+    printableTemplateFileId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
+    scopes: z.ZodOptional<z.ZodDefault<z.ZodArray<z.ZodObject<{
+        programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        submissionTypeId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    }, z.core.$strip>>>>;
+    definition: z.ZodOptional<z.ZodObject<{
+        schemaVersion: z.ZodLiteral<1>;
+        sections: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+            fields: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                description: z.ZodOptional<z.ZodString>;
+                type: z.ZodEnum<{
+                    number: "number";
+                    short_text: "short_text";
+                    long_text: "long_text";
+                    single_choice: "single_choice";
+                    scale: "scale";
+                    matrix: "matrix";
+                }>;
+                required: z.ZodOptional<z.ZodBoolean>;
+                feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+                min: z.ZodOptional<z.ZodNumber>;
+                max: z.ZodOptional<z.ZodNumber>;
+                decimals: z.ZodOptional<z.ZodNumber>;
+                options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    id: z.ZodString;
+                    label: z.ZodString;
+                    value: z.ZodNullable<z.ZodNumber>;
+                    feedbackLabel: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+                rows: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    id: z.ZodString;
+                    label: z.ZodString;
+                    required: z.ZodOptional<z.ZodBoolean>;
+                    observationRequired: z.ZodOptional<z.ZodBoolean>;
+                }, z.core.$strip>>>;
+                observation: z.ZodOptional<z.ZodObject<{
+                    enabled: z.ZodBoolean;
+                    required: z.ZodOptional<z.ZodBoolean>;
+                    requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                }, z.core.$strip>>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        calculations: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            label: z.ZodString;
+            formula: z.ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>;
+            decimals: z.ZodOptional<z.ZodNumber>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strip>>>;
+        outcomeRules: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            sourceId: z.ZodString;
+            operator: z.ZodEnum<{
+                eq: "eq";
+                neq: "neq";
+                gt: "gt";
+                gte: "gte";
+                lt: "lt";
+                lte: "lte";
+            }>;
+            value: z.ZodNumber;
+            recommendation: z.ZodEnum<{
+                changes_requested: "changes_requested";
+                accept: "accept";
+                reject: "reject";
+            }>;
+            priority: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>>>;
+        generalComments: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            required: z.ZodOptional<z.ZodBoolean>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+            label: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export declare const assessmentPreviewSchema: z.ZodObject<{
+    definition: z.ZodObject<{
+        schemaVersion: z.ZodLiteral<1>;
+        sections: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+            fields: z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                description: z.ZodOptional<z.ZodString>;
+                type: z.ZodEnum<{
+                    number: "number";
+                    short_text: "short_text";
+                    long_text: "long_text";
+                    single_choice: "single_choice";
+                    scale: "scale";
+                    matrix: "matrix";
+                }>;
+                required: z.ZodOptional<z.ZodBoolean>;
+                feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+                min: z.ZodOptional<z.ZodNumber>;
+                max: z.ZodOptional<z.ZodNumber>;
+                decimals: z.ZodOptional<z.ZodNumber>;
+                options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    id: z.ZodString;
+                    label: z.ZodString;
+                    value: z.ZodNullable<z.ZodNumber>;
+                    feedbackLabel: z.ZodOptional<z.ZodString>;
+                }, z.core.$strip>>>;
+                rows: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    id: z.ZodString;
+                    label: z.ZodString;
+                    required: z.ZodOptional<z.ZodBoolean>;
+                    observationRequired: z.ZodOptional<z.ZodBoolean>;
+                }, z.core.$strip>>>;
+                observation: z.ZodOptional<z.ZodObject<{
+                    enabled: z.ZodBoolean;
+                    required: z.ZodOptional<z.ZodBoolean>;
+                    requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                }, z.core.$strip>>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
+        calculations: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            label: z.ZodString;
+            formula: z.ZodType<unknown, unknown, z.core.$ZodTypeInternals<unknown, unknown>>;
+            decimals: z.ZodOptional<z.ZodNumber>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strip>>>;
+        outcomeRules: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            sourceId: z.ZodString;
+            operator: z.ZodEnum<{
+                eq: "eq";
+                neq: "neq";
+                gt: "gt";
+                gte: "gte";
+                lt: "lt";
+                lte: "lte";
+            }>;
+            value: z.ZodNumber;
+            recommendation: z.ZodEnum<{
+                changes_requested: "changes_requested";
+                accept: "accept";
+                reject: "reject";
+            }>;
+            priority: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>>>;
+        generalComments: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            required: z.ZodOptional<z.ZodBoolean>;
+            feedbackVisible: z.ZodOptional<z.ZodBoolean>;
+            label: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>;
+    answers: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    comments: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, z.core.$strip>;
+export declare const assessmentResponseSchema: z.ZodObject<{
+    answers: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    comments: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    proposedDecision: z.ZodOptional<z.ZodNullable<z.ZodEnum<{
+        changes_requested: "changes_requested";
+        accept: "accept";
+        reject: "reject";
+    }>>>;
+}, z.core.$strip>;

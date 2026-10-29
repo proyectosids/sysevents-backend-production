@@ -25,6 +25,7 @@ export declare class EvaluationsRepository {
         submissionId: string;
         evaluatorUserId: string;
         evaluationFormId?: string | null;
+        assessmentFormatVersionId?: string | null;
         dueAt?: Date | null;
         assignedBy: string;
     }): Promise<any>;

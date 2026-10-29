@@ -39,6 +39,7 @@ export declare class ReviewsRepository {
         reviewerUserId: string;
         assignedBy: string;
         rubricId?: string;
+        assessmentFormatVersionId?: string | null;
         dueAt?: Date;
     }): Promise<any>;
     findReviewerAssignment(submissionId: string, reviewerUserId: string): Promise<{

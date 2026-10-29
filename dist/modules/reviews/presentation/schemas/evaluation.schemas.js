@@ -13,6 +13,7 @@ exports.evaluatorAssignmentSchema = zod_1.z.object({
     submissionId: zod_1.z.string().uuid(),
     evaluatorUserId: zod_1.z.string().uuid(),
     evaluationFormId: zod_1.z.string().uuid().nullable().optional(),
+    assessmentFormatVersionId: zod_1.z.string().uuid().nullable().optional(),
     dueAt: zod_1.z.coerce.date().nullable().optional(),
 });
 exports.evaluationAssignmentParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });

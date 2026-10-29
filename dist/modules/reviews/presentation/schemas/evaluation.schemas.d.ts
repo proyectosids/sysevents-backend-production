@@ -10,6 +10,7 @@ export declare const evaluatorAssignmentSchema: z.ZodObject<{
     submissionId: z.ZodString;
     evaluatorUserId: z.ZodString;
     evaluationFormId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    assessmentFormatVersionId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     dueAt: z.ZodOptional<z.ZodNullable<z.ZodCoercedDate<unknown>>>;
 }, z.core.$strip>;
 export declare const evaluationAssignmentParamsSchema: z.ZodObject<{

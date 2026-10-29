@@ -136,14 +136,15 @@ class EvaluationsRepository {
             .input('submissionId', mssql_1.default.UniqueIdentifier, input.submissionId)
             .input('evaluatorUserId', mssql_1.default.UniqueIdentifier, input.evaluatorUserId)
             .input('evaluationFormId', mssql_1.default.UniqueIdentifier, input.evaluationFormId ?? null)
+            .input('assessmentFormatVersionId', mssql_1.default.UniqueIdentifier, input.assessmentFormatVersionId ?? null)
             .input('dueAt', mssql_1.default.DateTime2, input.dueAt ?? null)
             .input('assignedBy', mssql_1.default.UniqueIdentifier, input.assignedBy)
             .query(`
         INSERT INTO dbo.event_evaluator_assignments (
-          event_id, program_id, submission_id, evaluator_user_id, evaluation_form_id, due_at, assigned_by
+          event_id, program_id, submission_id, evaluator_user_id, evaluation_form_id, assessment_format_version_id, due_at, assigned_by
         )
         OUTPUT INSERTED.*
-        SELECT submission.event_id, submission.program_id, submission.id, @evaluatorUserId, @evaluationFormId, @dueAt, @assignedBy
+        SELECT submission.event_id, submission.program_id, submission.id, @evaluatorUserId, @evaluationFormId, @assessmentFormatVersionId, @dueAt, @assignedBy
         FROM dbo.submissions submission
         WHERE submission.id = @submissionId
           AND EXISTS (
@@ -167,9 +168,10 @@ class EvaluationsRepository {
           program.id AS programId, program.name AS programName,
           submission.id AS submissionId, submission.title AS submissionTitle,
           submission_type.name AS submissionType,
-          form.id AS formId, form.name AS formName, form.status AS formStatus,
-          form.definition_json AS definitionJson,
-          form.printable_template_file_id AS printableTemplateFileId,
+          COALESCE(dynamic_format.id, form.id) AS formId, COALESCE(dynamic_format.name, form.name) AS formName,
+          COALESCE(dynamic_version.status, form.status) AS formStatus,
+          COALESCE(dynamic_version.definition_json, form.definition_json) AS definitionJson,
+          COALESCE(dynamic_version.printable_template_file_id, form.printable_template_file_id) AS printableTemplateFileId,
           evaluation.submitted_at AS submittedAt
         FROM dbo.event_evaluator_assignments assignment
         INNER JOIN dbo.events event ON event.id = assignment.event_id
@@ -177,6 +179,8 @@ class EvaluationsRepository {
         INNER JOIN dbo.submissions submission ON submission.id = assignment.submission_id
         INNER JOIN dbo.submission_types submission_type ON submission_type.id = submission.submission_type_id
         LEFT JOIN dbo.event_evaluation_forms form ON form.id = assignment.evaluation_form_id
+        LEFT JOIN dbo.event_assessment_format_versions dynamic_version ON dynamic_version.id = assignment.assessment_format_version_id
+        LEFT JOIN dbo.event_assessment_formats dynamic_format ON dynamic_format.id = dynamic_version.format_id
         LEFT JOIN dbo.event_evaluations evaluation ON evaluation.assignment_id = assignment.id
         WHERE assignment.evaluator_user_id = @userId AND assignment.status <> 'cancelled'
         ORDER BY CASE assignment.status WHEN 'pending' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END,
@@ -190,9 +194,10 @@ class EvaluationsRepository {
             .input('assignmentId', mssql_1.default.UniqueIdentifier, assignmentId)
             .input('userId', mssql_1.default.UniqueIdentifier, evaluatorUserId)
             .query(`
-        SELECT TOP 1 form.printable_template_file_id AS file_id
+        SELECT TOP 1 COALESCE(dynamic_version.printable_template_file_id, form.printable_template_file_id) AS file_id
         FROM dbo.event_evaluator_assignments assignment
-        INNER JOIN dbo.event_evaluation_forms form ON form.id = assignment.evaluation_form_id AND form.status = 'active'
+        LEFT JOIN dbo.event_evaluation_forms form ON form.id = assignment.evaluation_form_id AND form.status = 'active'
+        LEFT JOIN dbo.event_assessment_format_versions dynamic_version ON dynamic_version.id = assignment.assessment_format_version_id AND dynamic_version.status IN ('published','archived')
         WHERE assignment.id = @assignmentId AND assignment.evaluator_user_id = @userId
           AND form.printable_template_file_id IS NOT NULL
       `);
@@ -248,12 +253,17 @@ class EvaluationsRepository {
           submission.id AS submissionId, submission.title AS submissionTitle,
           submission_type.name AS submissionType,
           evaluator.first_name AS evaluatorFirstName, evaluator.last_name AS evaluatorLastName,
-          evaluation.answers_json AS answersJson, evaluation.comments
+          evaluation.answers_json AS answersJson, evaluation.comments,
+          response.calculated_json AS calculatedJson, response.recommendation,
+          dynamic_format.name AS formatName, dynamic_version.definition_json AS definitionJson
         FROM dbo.event_evaluations evaluation
         INNER JOIN dbo.event_evaluator_assignments assignment ON assignment.id = evaluation.assignment_id
         INNER JOIN dbo.submissions submission ON submission.id = assignment.submission_id
         INNER JOIN dbo.submission_types submission_type ON submission_type.id = submission.submission_type_id
         INNER JOIN dbo.users evaluator ON evaluator.id = assignment.evaluator_user_id
+        LEFT JOIN dbo.assessment_responses response ON response.evaluator_assignment_id = assignment.id AND response.status = 'submitted'
+        LEFT JOIN dbo.event_assessment_format_versions dynamic_version ON dynamic_version.id = response.format_version_id
+        LEFT JOIN dbo.event_assessment_formats dynamic_format ON dynamic_format.id = dynamic_version.format_id
         WHERE submission.owner_user_id = @userId AND assignment.status = 'submitted'
         ORDER BY evaluation.submitted_at DESC
       `);
