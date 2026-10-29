@@ -24,14 +24,26 @@ const fieldSchema = zod_1.z.object({
     decimals: zod_1.z.number().int().min(0).max(6).optional(),
     options: zod_1.z.array(optionSchema).max(100).optional(),
     rows: zod_1.z.array(zod_1.z.object({ id, label: zod_1.z.string().trim().min(1).max(500), required: zod_1.z.boolean().optional(), observationRequired: zod_1.z.boolean().optional() })).max(300).optional(),
-    observation: zod_1.z.object({ enabled: zod_1.z.boolean(), required: zod_1.z.boolean().optional(), requiredWhenOptionIds: zod_1.z.array(id).optional() }).optional(),
+    observation: zod_1.z.object({ enabled: zod_1.z.boolean(), label: zod_1.z.string().max(180).optional(), required: zod_1.z.boolean().optional(), requiredWhenOptionIds: zod_1.z.array(id).optional() }).optional(),
 });
 exports.assessmentDefinitionSchema = zod_1.z.object({
     schemaVersion: zod_1.z.literal(1),
+    header: zod_1.z.object({
+        enabled: zod_1.z.boolean(),
+        title: zod_1.z.string().max(180).optional(),
+        showEventIdentity: zod_1.z.boolean().optional(),
+        fields: zod_1.z.array(zod_1.z.object({
+            id,
+            label: zod_1.z.string().trim().min(1).max(180),
+            source: zod_1.z.enum(['submission_title', 'submission_type', 'knowledge_area', 'knowledge_line', 'registration_field']),
+            registrationFieldKey: zod_1.z.string().trim().max(120).optional(),
+        })).max(30).default([]),
+    }).optional(),
     sections: zod_1.z.array(zod_1.z.object({ id, title: zod_1.z.string().trim().min(1).max(180), description: zod_1.z.string().max(2000).optional(), feedbackVisible: zod_1.z.boolean().optional(), fields: zod_1.z.array(fieldSchema).max(300) })).min(1).max(50),
     calculations: zod_1.z.array(zod_1.z.object({ id, label: zod_1.z.string().trim().min(1).max(180), formula: formulaNodeSchema, decimals: zod_1.z.number().int().min(0).max(6).optional(), feedbackVisible: zod_1.z.boolean().optional() })).max(100).default([]),
     outcomeRules: zod_1.z.array(zod_1.z.object({ id, sourceId: id, operator: zod_1.z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte']), value: zod_1.z.number().finite(), recommendation: zod_1.z.enum(['accept', 'reject', 'changes_requested']), priority: zod_1.z.number().int().optional() })).max(100).default([]),
     generalComments: zod_1.z.object({ enabled: zod_1.z.boolean(), required: zod_1.z.boolean().optional(), feedbackVisible: zod_1.z.boolean().optional(), label: zod_1.z.string().max(180).optional() }).optional(),
+    notes: zod_1.z.object({ enabled: zod_1.z.boolean(), title: zod_1.z.string().max(180).optional(), content: zod_1.z.string().max(5000).optional() }).optional(),
 });
 exports.assessmentEventParamsSchema = zod_1.z.object({ eventId: zod_1.z.string().uuid() });
 exports.assessmentFormatParamsSchema = exports.assessmentEventParamsSchema.extend({ formatId: zod_1.z.string().uuid() });

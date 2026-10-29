@@ -222,8 +222,21 @@ class AssessmentFormatsRepository {
         const result = await pool.request().input('assignmentId', mssql_1.default.UniqueIdentifier, assignmentId).input('userId', mssql_1.default.UniqueIdentifier, userId).query(`
       SELECT assignment.id,assignment.status,version.id AS versionId,version.version_number AS versionNumber,version.definition_json AS definitionJson,
         format.id AS formatId,format.name AS formatName,format.instructions,format.purpose,version.printable_template_file_id AS printableTemplateFileId,
-        response.id AS responseId,response.answers_json AS answersJson,response.calculated_json AS calculatedJson,response.recommendation,response.proposed_decision AS proposedDecision,response.comments,response.status AS responseStatus
+        response.id AS responseId,response.answers_json AS answersJson,response.calculated_json AS calculatedJson,response.recommendation,response.proposed_decision AS proposedDecision,response.comments,response.status AS responseStatus,
+        event.name AS eventName,event.logo_file_id AS eventLogoFileId,submission.title AS submissionTitle,submission_type.name AS submissionType,
+        knowledge_area.name AS knowledgeArea,knowledge_line.name AS knowledgeLine,registration_response.answers_json AS registrationAnswersJson
       FROM dbo.${table} assignment
+      INNER JOIN dbo.submissions submission ON submission.id=assignment.submission_id
+      INNER JOIN dbo.events event ON event.id=submission.event_id
+      LEFT JOIN dbo.submission_types submission_type ON submission_type.id=submission.submission_type_id
+      LEFT JOIN dbo.event_knowledge_areas knowledge_area ON knowledge_area.id=submission.knowledge_area_id
+      LEFT JOIN dbo.event_knowledge_lines knowledge_line ON knowledge_line.id=submission.knowledge_line_id
+      OUTER APPLY (
+        SELECT TOP 1 form_response.answers_json
+        FROM dbo.event_registration_form_responses form_response
+        WHERE form_response.registration_id=submission.registration_id
+        ORDER BY form_response.submitted_at DESC
+      ) registration_response
       LEFT JOIN dbo.event_assessment_format_versions version ON version.id=assignment.assessment_format_version_id
       LEFT JOIN dbo.event_assessment_formats format ON format.id=version.format_id
       LEFT JOIN dbo.assessment_responses response ON response.${responseColumn}=assignment.id
@@ -232,7 +245,18 @@ class AssessmentFormatsRepository {
         const row = result.recordset[0];
         if (!row)
             return null;
-        return { ...row, definition: parse(row.definitionJson, null), answers: parse(row.answersJson, {}), calculated: parse(row.calculatedJson, {}) };
+        return {
+            ...row,
+            definition: parse(row.definitionJson, null),
+            answers: parse(row.answersJson, {}),
+            calculated: parse(row.calculatedJson, {}),
+            context: {
+                eventName: row.eventName ?? null, eventLogoFileId: row.eventLogoFileId ?? null,
+                submissionTitle: row.submissionTitle ?? null, submissionType: row.submissionType ?? null,
+                knowledgeArea: row.knowledgeArea ?? null, knowledgeLine: row.knowledgeLine ?? null,
+                registrationAnswers: parse(row.registrationAnswersJson, {}),
+            },
+        };
     }
     async saveResponse(input) {
         const workspace = await this.workspace(input.kind, input.assignmentId, input.userId);

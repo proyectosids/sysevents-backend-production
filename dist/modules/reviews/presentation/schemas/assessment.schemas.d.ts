@@ -1,6 +1,23 @@
 import { z } from 'zod';
 export declare const assessmentDefinitionSchema: z.ZodObject<{
     schemaVersion: z.ZodLiteral<1>;
+    header: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodBoolean;
+        title: z.ZodOptional<z.ZodString>;
+        showEventIdentity: z.ZodOptional<z.ZodBoolean>;
+        fields: z.ZodDefault<z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            label: z.ZodString;
+            source: z.ZodEnum<{
+                submission_title: "submission_title";
+                submission_type: "submission_type";
+                knowledge_area: "knowledge_area";
+                knowledge_line: "knowledge_line";
+                registration_field: "registration_field";
+            }>;
+            registrationFieldKey: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>>;
+    }, z.core.$strip>>;
     sections: z.ZodArray<z.ZodObject<{
         id: z.ZodString;
         title: z.ZodString;
@@ -37,6 +54,7 @@ export declare const assessmentDefinitionSchema: z.ZodObject<{
             }, z.core.$strip>>>;
             observation: z.ZodOptional<z.ZodObject<{
                 enabled: z.ZodBoolean;
+                label: z.ZodOptional<z.ZodString>;
                 required: z.ZodOptional<z.ZodBoolean>;
                 requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
             }, z.core.$strip>>;
@@ -74,6 +92,11 @@ export declare const assessmentDefinitionSchema: z.ZodObject<{
         feedbackVisible: z.ZodOptional<z.ZodBoolean>;
         label: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>>;
+    notes: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodBoolean;
+        title: z.ZodOptional<z.ZodString>;
+        content: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
 }, z.core.$strip>;
 export declare const assessmentEventParamsSchema: z.ZodObject<{
     eventId: z.ZodString;
@@ -107,6 +130,23 @@ export declare const createAssessmentFormatSchema: z.ZodObject<{
     }, z.core.$strip>>>;
     definition: z.ZodObject<{
         schemaVersion: z.ZodLiteral<1>;
+        header: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            title: z.ZodOptional<z.ZodString>;
+            showEventIdentity: z.ZodOptional<z.ZodBoolean>;
+            fields: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                source: z.ZodEnum<{
+                    submission_title: "submission_title";
+                    submission_type: "submission_type";
+                    knowledge_area: "knowledge_area";
+                    knowledge_line: "knowledge_line";
+                    registration_field: "registration_field";
+                }>;
+                registrationFieldKey: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>>;
+        }, z.core.$strip>>;
         sections: z.ZodArray<z.ZodObject<{
             id: z.ZodString;
             title: z.ZodString;
@@ -143,6 +183,7 @@ export declare const createAssessmentFormatSchema: z.ZodObject<{
                 }, z.core.$strip>>>;
                 observation: z.ZodOptional<z.ZodObject<{
                     enabled: z.ZodBoolean;
+                    label: z.ZodOptional<z.ZodString>;
                     required: z.ZodOptional<z.ZodBoolean>;
                     requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
                 }, z.core.$strip>>;
@@ -179,6 +220,11 @@ export declare const createAssessmentFormatSchema: z.ZodObject<{
             required: z.ZodOptional<z.ZodBoolean>;
             feedbackVisible: z.ZodOptional<z.ZodBoolean>;
             label: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
+        notes: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            title: z.ZodOptional<z.ZodString>;
+            content: z.ZodOptional<z.ZodString>;
         }, z.core.$strip>>;
     }, z.core.$strip>;
     printableTemplateFileId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -193,6 +239,23 @@ export declare const updateAssessmentFormatSchema: z.ZodObject<{
     }, z.core.$strip>>>>;
     definition: z.ZodOptional<z.ZodObject<{
         schemaVersion: z.ZodLiteral<1>;
+        header: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            title: z.ZodOptional<z.ZodString>;
+            showEventIdentity: z.ZodOptional<z.ZodBoolean>;
+            fields: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                source: z.ZodEnum<{
+                    submission_title: "submission_title";
+                    submission_type: "submission_type";
+                    knowledge_area: "knowledge_area";
+                    knowledge_line: "knowledge_line";
+                    registration_field: "registration_field";
+                }>;
+                registrationFieldKey: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>>;
+        }, z.core.$strip>>;
         sections: z.ZodArray<z.ZodObject<{
             id: z.ZodString;
             title: z.ZodString;
@@ -229,6 +292,7 @@ export declare const updateAssessmentFormatSchema: z.ZodObject<{
                 }, z.core.$strip>>>;
                 observation: z.ZodOptional<z.ZodObject<{
                     enabled: z.ZodBoolean;
+                    label: z.ZodOptional<z.ZodString>;
                     required: z.ZodOptional<z.ZodBoolean>;
                     requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
                 }, z.core.$strip>>;
@@ -265,12 +329,34 @@ export declare const updateAssessmentFormatSchema: z.ZodObject<{
             required: z.ZodOptional<z.ZodBoolean>;
             feedbackVisible: z.ZodOptional<z.ZodBoolean>;
             label: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
+        notes: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            title: z.ZodOptional<z.ZodString>;
+            content: z.ZodOptional<z.ZodString>;
         }, z.core.$strip>>;
     }, z.core.$strip>>;
 }, z.core.$strip>;
 export declare const assessmentPreviewSchema: z.ZodObject<{
     definition: z.ZodObject<{
         schemaVersion: z.ZodLiteral<1>;
+        header: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            title: z.ZodOptional<z.ZodString>;
+            showEventIdentity: z.ZodOptional<z.ZodBoolean>;
+            fields: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                id: z.ZodString;
+                label: z.ZodString;
+                source: z.ZodEnum<{
+                    submission_title: "submission_title";
+                    submission_type: "submission_type";
+                    knowledge_area: "knowledge_area";
+                    knowledge_line: "knowledge_line";
+                    registration_field: "registration_field";
+                }>;
+                registrationFieldKey: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>>;
+        }, z.core.$strip>>;
         sections: z.ZodArray<z.ZodObject<{
             id: z.ZodString;
             title: z.ZodString;
@@ -307,6 +393,7 @@ export declare const assessmentPreviewSchema: z.ZodObject<{
                 }, z.core.$strip>>>;
                 observation: z.ZodOptional<z.ZodObject<{
                     enabled: z.ZodBoolean;
+                    label: z.ZodOptional<z.ZodString>;
                     required: z.ZodOptional<z.ZodBoolean>;
                     requiredWhenOptionIds: z.ZodOptional<z.ZodArray<z.ZodString>>;
                 }, z.core.$strip>>;
@@ -343,6 +430,11 @@ export declare const assessmentPreviewSchema: z.ZodObject<{
             required: z.ZodOptional<z.ZodBoolean>;
             feedbackVisible: z.ZodOptional<z.ZodBoolean>;
             label: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
+        notes: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodBoolean;
+            title: z.ZodOptional<z.ZodString>;
+            content: z.ZodOptional<z.ZodString>;
         }, z.core.$strip>>;
     }, z.core.$strip>;
     answers: z.ZodDefault<z.ZodRecord<z.ZodString, z.ZodUnknown>>;

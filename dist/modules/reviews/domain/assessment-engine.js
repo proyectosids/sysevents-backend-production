@@ -30,6 +30,15 @@ function validateAssessmentDefinition(definition) {
         errors.push('Agrega al menos una sección.');
     const fields = new Map();
     const identifiers = new Set();
+    for (const contextField of definition?.header?.fields ?? []) {
+        if (!idPattern.test(contextField.id) || identifiers.has(contextField.id))
+            errors.push(`Identificador de dato de encabezado inválido o repetido: ${contextField.id || '(vacío)'}.`);
+        identifiers.add(contextField.id);
+        if (!contextField.label?.trim())
+            errors.push(`El dato de encabezado ${contextField.id || '(sin id)'} requiere etiqueta.`);
+        if (contextField.source === 'registration_field' && !contextField.registrationFieldKey?.trim())
+            errors.push(`${contextField.label || contextField.id} requiere la clave del campo de registro.`);
+    }
     for (const section of definition?.sections ?? []) {
         if (!idPattern.test(section.id) || identifiers.has(section.id))
             errors.push(`Identificador de sección inválido o repetido: ${section.id || '(vacío)'}.`);

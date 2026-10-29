@@ -25,10 +25,12 @@ export type AssessmentField = {
     }>;
     observation?: {
         enabled: boolean;
+        label?: string;
         required?: boolean;
         requiredWhenOptionIds?: string[];
     };
 };
+export type AssessmentContextSource = 'submission_title' | 'submission_type' | 'knowledge_area' | 'knowledge_line' | 'registration_field';
 export type FormulaNode = {
     type: 'constant';
     value: number;
@@ -57,6 +59,17 @@ export type FormulaNode = {
 };
 export type AssessmentDefinition = {
     schemaVersion: 1;
+    header?: {
+        enabled: boolean;
+        title?: string;
+        showEventIdentity?: boolean;
+        fields: Array<{
+            id: string;
+            label: string;
+            source: AssessmentContextSource;
+            registrationFieldKey?: string;
+        }>;
+    };
     sections: Array<{
         id: string;
         title: string;
@@ -84,6 +97,11 @@ export type AssessmentDefinition = {
         required?: boolean;
         feedbackVisible?: boolean;
         label?: string;
+    };
+    notes?: {
+        enabled: boolean;
+        title?: string;
+        content?: string;
     };
 };
 export type AssessmentEvaluation = {
