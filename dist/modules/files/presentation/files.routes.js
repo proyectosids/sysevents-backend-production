@@ -187,8 +187,9 @@ exports.publicFilesRouter.get('/:id/download', (0, async_handler_1.asyncHandler)
         throw new app_error_1.AppError('File not found', 404, 'FILE_NOT_FOUND');
     }
     const isImage = file.mimeType.startsWith('image/');
-    const isPublicMaterial = !isImage ? await filesRepository.isPublicMaterial(file.id) : false;
-    if (!isImage && !isPublicMaterial) {
+    const isMaterialFile = await filesRepository.isEventMaterialFile(file.id);
+    const isPublicMaterial = isMaterialFile ? await filesRepository.isPublicMaterial(file.id) : false;
+    if ((isMaterialFile && !isPublicMaterial) || (!isImage && !isPublicMaterial)) {
         throw new app_error_1.AppError('File not found', 404, 'FILE_NOT_FOUND');
     }
     if (file.eventId) {

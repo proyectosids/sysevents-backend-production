@@ -23,4 +23,5 @@ export declare class FilesRepository {
     softDelete(id: string): Promise<FileRecord | null>;
     isPublicMaterial(fileId: string): Promise<boolean>;
     canUserDownloadEventMaterial(fileId: string, userId: string): Promise<boolean>;
+    isEventMaterialFile(fileId: string): Promise<boolean>;
 }

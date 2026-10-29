@@ -7,8 +7,13 @@ export declare const reviewTeamProgramParamsSchema: z.ZodObject<{
     programId: z.ZodString;
 }, z.core.$strip>;
 export declare const saveProgramReviewTeamSchema: z.ZodObject<{
+    teamId: z.ZodOptional<z.ZodString>;
+    name: z.ZodDefault<z.ZodString>;
     leaderUserId: z.ZodString;
     reviewerUserIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+}, z.core.$strip>;
+export declare const saveProgramSupervisorSchema: z.ZodObject<{
+    userId: z.ZodString;
 }, z.core.$strip>;
 export declare const reviewSubmissionParamsSchema: z.ZodObject<{
     id: z.ZodString;
@@ -17,9 +22,13 @@ export declare const reviewIdParamsSchema: z.ZodObject<{
     id: z.ZodString;
 }, z.core.$strip>;
 export declare const assignReviewerSchema: z.ZodObject<{
+    teamId: z.ZodString;
     reviewerUserId: z.ZodString;
     rubricId: z.ZodOptional<z.ZodString>;
     dueAt: z.ZodOptional<z.ZodCoercedDate<unknown>>;
+}, z.core.$strip>;
+export declare const reviewWorkflowReasonSchema: z.ZodObject<{
+    reason: z.ZodString;
 }, z.core.$strip>;
 export declare const submitReviewSchema: z.ZodObject<{
     recommendation: z.ZodEnum<{

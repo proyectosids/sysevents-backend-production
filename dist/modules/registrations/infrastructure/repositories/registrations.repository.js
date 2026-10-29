@@ -24,6 +24,13 @@ function mapRegistrationAddon(row) {
         metadata: JSON.parse(row.metadata_json || '{}'),
     };
 }
+function mapEventMaterial(row) {
+    return {
+        ...row,
+        targetRoles: row.targetRolesCsv ? row.targetRolesCsv.split(',').filter(Boolean) : [],
+        targetRolesCsv: undefined,
+    };
+}
 function parseJson(value, fallback) {
     try {
         return JSON.parse(value);
@@ -1276,16 +1283,18 @@ class RegistrationsRepository {
           m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
-          f.size_bytes AS sizeBytes
+          f.size_bytes AS sizeBytes,
+          (SELECT STRING_AGG(target.role_key, ',') FROM dbo.event_material_role_targets target WHERE target.material_id = m.id) AS targetRolesCsv
         FROM dbo.event_materials m
         INNER JOIN dbo.files f ON f.id = m.file_id
         LEFT JOIN dbo.event_programs p ON p.id = m.program_id
         WHERE m.event_id = @eventId
           AND m.is_active = 1
           AND (@includeRestricted = 1 OR m.visibility = 'public')
+          AND (@includeRestricted = 1 OR NOT EXISTS (SELECT 1 FROM dbo.event_material_role_targets target WHERE target.material_id = m.id))
         ORDER BY COALESCE(p.sort_order, 0) ASC, m.sort_order ASC, m.created_at ASC
       `);
-        return result.recordset;
+        return result.recordset.map(mapEventMaterial);
     }
     async listEventMaterialsForParticipant(eventId, userId) {
         const pool = await (0, database_1.getSqlPool)();
@@ -1299,13 +1308,17 @@ class RegistrationsRepository {
           m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
-          f.size_bytes AS sizeBytes
+          f.size_bytes AS sizeBytes,
+          (SELECT STRING_AGG(target.role_key, ',') FROM dbo.event_material_role_targets target WHERE target.material_id = m.id) AS targetRolesCsv
         FROM dbo.event_materials m
         INNER JOIN dbo.files f ON f.id = m.file_id
         LEFT JOIN dbo.event_programs p ON p.id = m.program_id
         WHERE m.event_id = @eventId
           AND m.is_active = 1
-          AND EXISTS (
+          AND (
+            (
+              NOT EXISTS (SELECT 1 FROM dbo.event_material_role_targets target WHERE target.material_id = m.id)
+              AND EXISTS (
             SELECT 1
             FROM dbo.event_registrations r
             WHERE r.event_id = m.event_id
@@ -1334,28 +1347,83 @@ class RegistrationsRepository {
                   )
                 )
               )
+              )
+            )
+            OR EXISTS (
+              SELECT 1 FROM dbo.event_material_role_targets target
+              WHERE target.material_id = m.id
+                AND (
+                  (target.role_key = 'supervisor' AND EXISTS (
+                    SELECT 1 FROM dbo.event_program_staff_assignments staff
+                    WHERE staff.event_id = m.event_id AND staff.user_id = @userId AND staff.staff_role = 'supervisor' AND staff.is_active = 1
+                      AND (m.program_id IS NULL OR staff.program_id IS NULL OR staff.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'evaluator' AND EXISTS (
+                    SELECT 1 FROM dbo.event_program_staff_assignments staff
+                    WHERE staff.event_id = m.event_id AND staff.user_id = @userId AND staff.staff_role = 'evaluator' AND staff.is_active = 1
+                      AND (m.program_id IS NULL OR staff.program_id IS NULL OR staff.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'leader' AND EXISTS (
+                    SELECT 1 FROM dbo.event_review_teams team
+                    WHERE team.event_id = m.event_id AND team.leader_user_id = @userId AND team.is_active = 1
+                      AND (m.program_id IS NULL OR team.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'reviewer' AND EXISTS (
+                    SELECT 1 FROM dbo.event_review_team_members member
+                    INNER JOIN dbo.event_review_teams team ON team.id = member.team_id AND team.is_active = 1
+                    WHERE team.event_id = m.event_id AND member.user_id = @userId AND member.is_active = 1
+                      AND (m.program_id IS NULL OR team.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'participant' AND EXISTS (
+                    SELECT 1 FROM dbo.event_registrations registration
+                    WHERE registration.event_id = m.event_id AND registration.user_id = @userId AND registration.status <> 'cancelled'
+                      AND (m.program_id IS NULL OR registration.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'speaker' AND EXISTS (
+                    SELECT 1 FROM dbo.event_registrations registration
+                    WHERE registration.event_id = m.event_id AND registration.user_id = @userId
+                      AND registration.status <> 'cancelled' AND registration.participation_mode = 'presenter'
+                      AND (m.program_id IS NULL OR registration.program_id = m.program_id)
+                  ))
+                  OR (target.role_key IN ('advisor', 'team_member') AND EXISTS (
+                    SELECT 1 FROM dbo.event_registration_team_members team_member
+                    INNER JOIN dbo.event_registrations registration ON registration.id = team_member.registration_id
+                    INNER JOIN dbo.users current_user ON current_user.id = @userId AND current_user.email = team_member.email
+                    WHERE registration.event_id = m.event_id AND team_member.role = target.role_key
+                      AND (m.program_id IS NULL OR registration.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'keynote_speaker' AND EXISTS (
+                    SELECT 1 FROM dbo.event_speakers speaker
+                    INNER JOIN dbo.users current_user ON current_user.id = @userId AND current_user.email = speaker.email
+                    WHERE speaker.event_id = m.event_id AND speaker.status = 'published'
+                  ))
+                )
+            )
           )
         ORDER BY programName ASC, sortOrder ASC
       `);
-        return result.recordset;
+        return result.recordset.map(mapEventMaterial);
     }
     async createEventMaterial(eventId, input) {
         const pool = await (0, database_1.getSqlPool)();
-        const result = await pool
-            .request()
-            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
-            .input('fileId', mssql_1.default.UniqueIdentifier, input.fileId)
-            .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
-            .input('title', mssql_1.default.NVarChar(180), input.title)
-            .input('description', mssql_1.default.NVarChar(500), input.description ?? null)
-            .input('materialType', mssql_1.default.NVarChar(80), input.materialType ?? 'other')
-            .input('materialTypeLabel', mssql_1.default.NVarChar(120), input.materialType === 'other' ? input.materialTypeLabel?.trim() || null : null)
-            .input('visibility', mssql_1.default.NVarChar(40), input.visibility ?? 'public')
-            .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
-            .input('isActive', mssql_1.default.Bit, input.isActive ?? true)
-            .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? 0)
-            .input('userId', mssql_1.default.UniqueIdentifier, input.userId ?? null)
-            .query(`
+        const transaction = pool.transaction();
+        await transaction.begin();
+        try {
+            const result = await transaction
+                .request()
+                .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+                .input('fileId', mssql_1.default.UniqueIdentifier, input.fileId)
+                .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
+                .input('title', mssql_1.default.NVarChar(180), input.title)
+                .input('description', mssql_1.default.NVarChar(500), input.description ?? null)
+                .input('materialType', mssql_1.default.NVarChar(80), input.materialType ?? 'other')
+                .input('materialTypeLabel', mssql_1.default.NVarChar(120), input.materialType === 'other' ? input.materialTypeLabel?.trim() || null : null)
+                .input('visibility', mssql_1.default.NVarChar(40), input.visibility ?? 'public')
+                .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
+                .input('isActive', mssql_1.default.Bit, input.isActive ?? true)
+                .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? 0)
+                .input('userId', mssql_1.default.UniqueIdentifier, input.userId ?? null)
+                .query(`
         INSERT INTO dbo.event_materials (
           event_id, file_id, program_id, title, description, material_type, material_type_label, visibility, registration_type_id, is_active, sort_order, created_by
         )
@@ -1365,29 +1433,43 @@ class RegistrationsRepository {
           INSERTED.is_active AS isActive, INSERTED.sort_order AS sortOrder
         VALUES (@eventId, @fileId, @programId, @title, @description, @materialType, @materialTypeLabel, @visibility, @registrationTypeId, @isActive, @sortOrder, @userId)
       `);
-        return result.recordset[0];
+            const material = result.recordset[0];
+            for (const role of Array.from(new Set(input.targetRoles ?? []))) {
+                await transaction.request().input('materialId', mssql_1.default.UniqueIdentifier, material.id).input('role', mssql_1.default.NVarChar(40), role)
+                    .query('INSERT INTO dbo.event_material_role_targets (material_id, role_key) VALUES (@materialId, @role)');
+            }
+            await transaction.commit();
+            return { ...material, targetRoles: input.targetRoles ?? [] };
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
     }
     async updateEventMaterial(eventId, materialId, input) {
         const pool = await (0, database_1.getSqlPool)();
-        const result = await pool
-            .request()
-            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
-            .input('materialId', mssql_1.default.UniqueIdentifier, materialId)
-            .input('fileId', mssql_1.default.UniqueIdentifier, input.fileId ?? null)
-            .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
-            .input('updateProgramId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'programId'))
-            .input('title', mssql_1.default.NVarChar(180), input.title ?? null)
-            .input('description', mssql_1.default.NVarChar(500), input.description ?? null)
-            .input('updateDescription', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'description'))
-            .input('materialType', mssql_1.default.NVarChar(80), input.materialType ?? null)
-            .input('materialTypeLabel', mssql_1.default.NVarChar(120), input.materialTypeLabel?.trim() || null)
-            .input('updateMaterialTypeLabel', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'materialTypeLabel'))
-            .input('visibility', mssql_1.default.NVarChar(40), input.visibility ?? null)
-            .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
-            .input('updateRegistrationTypeId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'registrationTypeId'))
-            .input('isActive', mssql_1.default.Bit, input.isActive ?? null)
-            .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? null)
-            .query(`
+        const transaction = pool.transaction();
+        await transaction.begin();
+        try {
+            const result = await transaction
+                .request()
+                .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+                .input('materialId', mssql_1.default.UniqueIdentifier, materialId)
+                .input('fileId', mssql_1.default.UniqueIdentifier, input.fileId ?? null)
+                .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
+                .input('updateProgramId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'programId'))
+                .input('title', mssql_1.default.NVarChar(180), input.title ?? null)
+                .input('description', mssql_1.default.NVarChar(500), input.description ?? null)
+                .input('updateDescription', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'description'))
+                .input('materialType', mssql_1.default.NVarChar(80), input.materialType ?? null)
+                .input('materialTypeLabel', mssql_1.default.NVarChar(120), input.materialTypeLabel?.trim() || null)
+                .input('updateMaterialTypeLabel', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'materialTypeLabel'))
+                .input('visibility', mssql_1.default.NVarChar(40), input.visibility ?? null)
+                .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
+                .input('updateRegistrationTypeId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'registrationTypeId'))
+                .input('isActive', mssql_1.default.Bit, input.isActive ?? null)
+                .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? null)
+                .query(`
         UPDATE dbo.event_materials
         SET file_id = COALESCE(@fileId, file_id),
             program_id = CASE WHEN @updateProgramId = 1 THEN @programId ELSE program_id END,
@@ -1417,7 +1499,22 @@ class RegistrationsRepository {
         LEFT JOIN dbo.event_programs p ON p.id = m.program_id
         WHERE m.id = @materialId AND m.event_id = @eventId;
       `);
-        return result.recordset[0] ?? null;
+            const material = result.recordset[0] ?? null;
+            if (material && Object.prototype.hasOwnProperty.call(input, 'targetRoles')) {
+                await transaction.request().input('materialId', mssql_1.default.UniqueIdentifier, materialId)
+                    .query('DELETE FROM dbo.event_material_role_targets WHERE material_id = @materialId');
+                for (const role of Array.from(new Set(input.targetRoles ?? []))) {
+                    await transaction.request().input('materialId', mssql_1.default.UniqueIdentifier, materialId).input('role', mssql_1.default.NVarChar(40), role)
+                        .query('INSERT INTO dbo.event_material_role_targets (material_id, role_key) VALUES (@materialId, @role)');
+                }
+            }
+            await transaction.commit();
+            return material ? { ...material, targetRoles: input.targetRoles ?? undefined } : null;
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
     }
     async deactivateEventMaterial(eventId, materialId) {
         const pool = await (0, database_1.getSqlPool)();

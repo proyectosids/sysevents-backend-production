@@ -137,6 +137,10 @@ class FilesRepository {
         SELECT COUNT(1) AS total
         FROM dbo.event_materials
         WHERE file_id = @fileId AND visibility = 'public' AND is_active = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.event_material_role_targets target
+            WHERE target.material_id = dbo.event_materials.id
+          )
       `);
         return (result.recordset[0]?.total ?? 0) > 0;
     }
@@ -157,7 +161,10 @@ class FilesRepository {
         FROM dbo.event_materials m
         WHERE m.file_id = @fileId
           AND m.is_active = 1
-          AND EXISTS (
+          AND (
+            (
+              NOT EXISTS (SELECT 1 FROM dbo.event_material_role_targets target WHERE target.material_id = m.id)
+              AND EXISTS (
             SELECT 1
             FROM dbo.event_registrations r
             WHERE r.event_id = m.event_id
@@ -186,8 +193,67 @@ class FilesRepository {
                   )
                 )
               )
+              )
+            )
+            OR EXISTS (
+              SELECT 1 FROM dbo.event_material_role_targets target
+              WHERE target.material_id = m.id
+                AND (
+                  (target.role_key = 'supervisor' AND EXISTS (
+                    SELECT 1 FROM dbo.event_program_staff_assignments staff
+                    WHERE staff.event_id = m.event_id AND staff.user_id = @userId AND staff.staff_role = 'supervisor' AND staff.is_active = 1
+                      AND (m.program_id IS NULL OR staff.program_id IS NULL OR staff.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'evaluator' AND EXISTS (
+                    SELECT 1 FROM dbo.event_program_staff_assignments staff
+                    WHERE staff.event_id = m.event_id AND staff.user_id = @userId AND staff.staff_role = 'evaluator' AND staff.is_active = 1
+                      AND (m.program_id IS NULL OR staff.program_id IS NULL OR staff.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'leader' AND EXISTS (
+                    SELECT 1 FROM dbo.event_review_teams team
+                    WHERE team.event_id = m.event_id AND team.leader_user_id = @userId AND team.is_active = 1
+                      AND (m.program_id IS NULL OR team.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'reviewer' AND EXISTS (
+                    SELECT 1 FROM dbo.event_review_team_members member
+                    INNER JOIN dbo.event_review_teams team ON team.id = member.team_id AND team.is_active = 1
+                    WHERE team.event_id = m.event_id AND member.user_id = @userId AND member.is_active = 1
+                      AND (m.program_id IS NULL OR team.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'participant' AND EXISTS (
+                    SELECT 1 FROM dbo.event_registrations registration
+                    WHERE registration.event_id = m.event_id AND registration.user_id = @userId AND registration.status <> 'cancelled'
+                      AND (m.program_id IS NULL OR registration.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'speaker' AND EXISTS (
+                    SELECT 1 FROM dbo.event_registrations registration
+                    WHERE registration.event_id = m.event_id AND registration.user_id = @userId
+                      AND registration.status <> 'cancelled' AND registration.participation_mode = 'presenter'
+                      AND (m.program_id IS NULL OR registration.program_id = m.program_id)
+                  ))
+                  OR (target.role_key IN ('advisor', 'team_member') AND EXISTS (
+                    SELECT 1 FROM dbo.event_registration_team_members team_member
+                    INNER JOIN dbo.event_registrations registration ON registration.id = team_member.registration_id
+                    INNER JOIN dbo.users current_user ON current_user.id = @userId AND current_user.email = team_member.email
+                    WHERE registration.event_id = m.event_id AND team_member.role = target.role_key
+                      AND (m.program_id IS NULL OR registration.program_id = m.program_id)
+                  ))
+                  OR (target.role_key = 'keynote_speaker' AND EXISTS (
+                    SELECT 1 FROM dbo.event_speakers speaker
+                    INNER JOIN dbo.users current_user ON current_user.id = @userId AND current_user.email = speaker.email
+                    WHERE speaker.event_id = m.event_id AND speaker.status = 'published'
+                  ))
+                )
+            )
           )
       `);
+        return (result.recordset[0]?.total ?? 0) > 0;
+    }
+    async isEventMaterialFile(fileId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('fileId', mssql_1.default.UniqueIdentifier, fileId)
+            .query('SELECT COUNT(1) AS total FROM dbo.event_materials WHERE file_id = @fileId AND is_active = 1');
         return (result.recordset[0]?.total ?? 0) > 0;
     }
 }

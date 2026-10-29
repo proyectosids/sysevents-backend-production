@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.finalDecisionSchema = exports.updateReviewFileCommentSchema = exports.createReviewFileCommentSchema = exports.reviewFileCommentParamsSchema = exports.reviewFileParamsSchema = exports.submitReviewSchema = exports.assignReviewerSchema = exports.reviewIdParamsSchema = exports.reviewSubmissionParamsSchema = exports.saveProgramReviewTeamSchema = exports.reviewTeamProgramParamsSchema = exports.reviewTeamEventParamsSchema = void 0;
+exports.finalDecisionSchema = exports.updateReviewFileCommentSchema = exports.createReviewFileCommentSchema = exports.reviewFileCommentParamsSchema = exports.reviewFileParamsSchema = exports.submitReviewSchema = exports.reviewWorkflowReasonSchema = exports.assignReviewerSchema = exports.reviewIdParamsSchema = exports.reviewSubmissionParamsSchema = exports.saveProgramSupervisorSchema = exports.saveProgramReviewTeamSchema = exports.reviewTeamProgramParamsSchema = exports.reviewTeamEventParamsSchema = void 0;
 const zod_1 = require("zod");
 exports.reviewTeamEventParamsSchema = zod_1.z.object({
     eventId: zod_1.z.string().uuid(),
@@ -9,15 +9,24 @@ exports.reviewTeamProgramParamsSchema = exports.reviewTeamEventParamsSchema.exte
     programId: zod_1.z.string().uuid(),
 });
 exports.saveProgramReviewTeamSchema = zod_1.z.object({
+    teamId: zod_1.z.string().uuid().optional(),
+    name: zod_1.z.string().trim().min(2).max(180).default('Equipo principal'),
     leaderUserId: zod_1.z.string().uuid(),
     reviewerUserIds: zod_1.z.array(zod_1.z.string().uuid()).default([]),
+});
+exports.saveProgramSupervisorSchema = zod_1.z.object({
+    userId: zod_1.z.string().uuid(),
 });
 exports.reviewSubmissionParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });
 exports.reviewIdParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });
 exports.assignReviewerSchema = zod_1.z.object({
+    teamId: zod_1.z.string().uuid(),
     reviewerUserId: zod_1.z.string().uuid(),
     rubricId: zod_1.z.string().uuid().optional(),
     dueAt: zod_1.z.coerce.date().optional(),
+});
+exports.reviewWorkflowReasonSchema = zod_1.z.object({
+    reason: zod_1.z.string().trim().min(3).max(5000),
 });
 exports.submitReviewSchema = zod_1.z.object({
     recommendation: zod_1.z.enum(['accept', 'reject', 'changes_requested']),

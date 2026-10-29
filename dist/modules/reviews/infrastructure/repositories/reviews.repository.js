@@ -240,14 +240,22 @@ class ReviewsRepository {
             const result = await transaction
                 .request()
                 .input('submissionId', mssql_1.default.UniqueIdentifier, input.submissionId)
+                .input('reviewTeamId', mssql_1.default.UniqueIdentifier, input.reviewTeamId)
                 .input('reviewerUserId', mssql_1.default.UniqueIdentifier, input.reviewerUserId)
                 .input('assignedBy', mssql_1.default.UniqueIdentifier, input.assignedBy)
                 .input('rubricId', mssql_1.default.UniqueIdentifier, input.rubricId ?? null)
                 .input('dueAt', mssql_1.default.DateTime2, input.dueAt ?? null)
                 .query(`
-          INSERT INTO dbo.review_assignments (submission_id, reviewer_user_id, assigned_by, rubric_id, due_at)
+          INSERT INTO dbo.review_assignments (submission_id, review_team_id, reviewer_user_id, assigned_by, rubric_id, due_at)
           OUTPUT INSERTED.*
-          VALUES (@submissionId, @reviewerUserId, @assignedBy, @rubricId, @dueAt)
+          VALUES (@submissionId, @reviewTeamId, @reviewerUserId, @assignedBy, @rubricId, @dueAt)
+        `);
+            await transaction.request()
+                .input('assignmentId', mssql_1.default.UniqueIdentifier, result.recordset[0].id)
+                .input('actorId', mssql_1.default.UniqueIdentifier, input.assignedBy)
+                .query(`
+          INSERT INTO dbo.review_workflow_history (assignment_id, action, from_status, to_status, acted_by)
+          VALUES (@assignmentId, 'assigned', NULL, 'assigned', @actorId)
         `);
             await transaction
                 .request()
@@ -378,7 +386,7 @@ class ReviewsRepository {
           CONCAT(users.first_name, ' ', users.last_name) AS reviewerName
         FROM dbo.review_file_comments file_comment
         INNER JOIN dbo.review_assignments assignment ON assignment.id = file_comment.assignment_id
-          AND assignment.status = 'submitted'
+          AND assignment.status = 'forwarded_to_supervisor'
         INNER JOIN dbo.users users ON users.id = assignment.reviewer_user_id
         WHERE assignment.submission_id = @submissionId
         ORDER BY file_comment.created_at ASC
@@ -394,7 +402,7 @@ class ReviewsRepository {
           SELECT TOP 1 recommendation, comments FROM dbo.review_results
           WHERE assignment_id = assignment.id ORDER BY created_at DESC
         ) result
-        WHERE assignment.submission_id = @submissionId AND assignment.status = 'submitted'
+        WHERE assignment.submission_id = @submissionId AND assignment.status = 'forwarded_to_supervisor'
         ORDER BY assignment.submitted_at ASC
       `);
         return { comments: comments.recordset, reviews: reviews.recordset };
@@ -466,7 +474,7 @@ class ReviewsRepository {
           SELECT TOP 1 recommendation, comments, score FROM dbo.review_results
           WHERE assignment_id = assignment.id ORDER BY created_at DESC
         ) result
-        WHERE assignment.id = @assignmentId AND assignment.status = 'submitted'
+        WHERE assignment.id = @assignmentId AND assignment.status IN ('submitted_to_leader', 'forwarded_to_supervisor')
       `);
         if (!assignment.recordset[0])
             return null;
@@ -514,7 +522,8 @@ class ReviewsRepository {
         IF EXISTS (
           SELECT 1 FROM dbo.review_assignments assignment
           INNER JOIN dbo.submission_files submission_file ON submission_file.submission_id = assignment.submission_id
-          WHERE assignment.id = @assignmentId AND assignment.reviewer_user_id = @reviewerUserId AND submission_file.file_id = @fileId
+          WHERE assignment.id = @assignmentId AND assignment.reviewer_user_id = @reviewerUserId
+            AND assignment.status IN ('assigned', 'returned_to_reviewer') AND submission_file.file_id = @fileId
         )
         INSERT INTO dbo.review_file_comments (assignment_id, file_id, page_number, section_label, selected_text, anchor_json, comment_text)
         OUTPUT INSERTED.id, INSERTED.file_id AS fileId, INSERTED.page_number AS pageNumber,
@@ -542,6 +551,7 @@ class ReviewsRepository {
         INNER JOIN dbo.review_assignments assignment ON assignment.id = file_comment.assignment_id
         WHERE file_comment.id = @commentId AND file_comment.assignment_id = @assignmentId
           AND assignment.reviewer_user_id = @reviewerUserId
+          AND assignment.status IN ('assigned', 'returned_to_reviewer')
       `);
         return result.recordset[0] ?? null;
     }
@@ -558,6 +568,7 @@ class ReviewsRepository {
         INNER JOIN dbo.review_assignments assignment ON assignment.id = file_comment.assignment_id
         WHERE file_comment.id = @commentId AND file_comment.assignment_id = @assignmentId
           AND assignment.reviewer_user_id = @reviewerUserId
+          AND assignment.status IN ('assigned', 'returned_to_reviewer')
       `);
         return Boolean(result.recordset[0]);
     }
@@ -570,7 +581,11 @@ class ReviewsRepository {
                 .request()
                 .input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
                 .input('reviewerUserId', mssql_1.default.UniqueIdentifier, input.reviewerUserId)
-                .query('SELECT TOP 1 id FROM dbo.review_assignments WHERE id = @assignmentId AND reviewer_user_id = @reviewerUserId');
+                .query(`
+          SELECT TOP 1 id, status FROM dbo.review_assignments
+          WHERE id = @assignmentId AND reviewer_user_id = @reviewerUserId
+            AND status IN ('assigned', 'returned_to_reviewer')
+        `);
             if (!assignment.recordset[0]) {
                 await transaction.rollback();
                 return null;
@@ -590,9 +605,17 @@ class ReviewsRepository {
                 .input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
                 .query(`
           UPDATE dbo.review_assignments
-          SET status = 'submitted', submitted_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+          SET status = 'submitted_to_leader', submitted_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
           OUTPUT INSERTED.*
           WHERE id = @assignmentId
+        `);
+            await transaction.request()
+                .input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
+                .input('fromStatus', mssql_1.default.NVarChar(40), assignment.recordset[0].status)
+                .input('actorId', mssql_1.default.UniqueIdentifier, input.reviewerUserId)
+                .query(`
+          INSERT INTO dbo.review_workflow_history (assignment_id, action, from_status, to_status, acted_by)
+          VALUES (@assignmentId, 'submitted_to_leader', @fromStatus, 'submitted_to_leader', @actorId)
         `);
             await transaction.commit();
             return result.recordset[0];

@@ -11,24 +11,6 @@ type RegistrationTypeRow = {
     capacity: number | null;
     is_active: boolean;
 };
-type EventMaterialRow = {
-    id: string;
-    eventId: string;
-    fileId: string;
-    programId: string | null;
-    programName: string | null;
-    title: string;
-    description: string | null;
-    materialType: string;
-    materialTypeLabel: string | null;
-    visibility: string;
-    registrationTypeId: string | null;
-    isActive: boolean;
-    sortOrder: number;
-    originalName: string;
-    mimeType: string;
-    sizeBytes: number;
-};
 export declare class RegistrationsRepository {
     listRegistrationTypes(eventId: string): Promise<sql.IRecordSet<any>>;
     createRegistrationType(eventId: string, input: {
@@ -252,8 +234,46 @@ export declare class RegistrationsRepository {
     approveRegistrationAsSpeaker(eventId: string, id: string, changedBy?: string): Promise<EventRegistration | null>;
     keepRegistrationAsParticipant(eventId: string, id: string, changedBy?: string): Promise<EventRegistration | null>;
     private promoteRegistrationToSpeaker;
-    listEventMaterials(eventId: string, includeRestricted?: boolean): Promise<sql.IRecordSet<EventMaterialRow>>;
-    listEventMaterialsForParticipant(eventId: string, userId: string): Promise<sql.IRecordSet<EventMaterialRow>>;
+    listEventMaterials(eventId: string, includeRestricted?: boolean): Promise<{
+        targetRoles: string[];
+        targetRolesCsv: undefined;
+        id: string;
+        eventId: string;
+        fileId: string;
+        programId: string | null;
+        programName: string | null;
+        title: string;
+        description: string | null;
+        materialType: string;
+        materialTypeLabel: string | null;
+        visibility: string;
+        registrationTypeId: string | null;
+        isActive: boolean;
+        sortOrder: number;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+    }[]>;
+    listEventMaterialsForParticipant(eventId: string, userId: string): Promise<{
+        targetRoles: string[];
+        targetRolesCsv: undefined;
+        id: string;
+        eventId: string;
+        fileId: string;
+        programId: string | null;
+        programName: string | null;
+        title: string;
+        description: string | null;
+        materialType: string;
+        materialTypeLabel: string | null;
+        visibility: string;
+        registrationTypeId: string | null;
+        isActive: boolean;
+        sortOrder: number;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+    }[]>;
     createEventMaterial(eventId: string, input: {
         fileId: string;
         programId?: string | null;
@@ -266,6 +286,7 @@ export declare class RegistrationsRepository {
         isActive?: boolean;
         sortOrder?: number;
         userId?: string;
+        targetRoles?: string[];
     }): Promise<any>;
     updateEventMaterial(eventId: string, materialId: string, input: {
         fileId?: string;
@@ -278,6 +299,7 @@ export declare class RegistrationsRepository {
         registrationTypeId?: string | null;
         isActive?: boolean;
         sortOrder?: number;
+        targetRoles?: string[];
     }): Promise<any>;
     deactivateEventMaterial(eventId: string, materialId: string): Promise<boolean>;
     getTeamCertificateSettings(eventId: string): Promise<{

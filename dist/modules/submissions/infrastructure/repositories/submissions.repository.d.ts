@@ -39,6 +39,7 @@ export declare class SubmissionsRepository {
         programId?: string | null;
         status?: string | null;
         submissionTypeId?: string | null;
+        scopeUserId?: string | null;
         leaderUserId?: string | null;
     }): Promise<Submission[]>;
     updateSubmission(id: string, input: {

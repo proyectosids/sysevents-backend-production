@@ -216,7 +216,7 @@ class SubmissionsRepository {
             .input('programId', mssql_1.default.UniqueIdentifier, filters.programId ?? null)
             .input('submissionTypeId', mssql_1.default.UniqueIdentifier, filters.submissionTypeId ?? null)
             .input('status', mssql_1.default.NVarChar(40), filters.status ?? null)
-            .input('leaderUserId', mssql_1.default.UniqueIdentifier, filters.leaderUserId ?? null)
+            .input('scopeUserId', mssql_1.default.UniqueIdentifier, filters.scopeUserId ?? filters.leaderUserId ?? null)
             .query(`
         SELECT s.*, st.name AS submission_type_name, p.name AS program_name,
           area.name AS knowledge_area_name, line.name AS knowledge_line_name,
@@ -234,13 +234,27 @@ class SubmissionsRepository {
           AND (@submissionTypeId IS NULL OR s.submission_type_id = @submissionTypeId)
           AND (@status IS NULL OR s.status = @status)
           AND (
-            @leaderUserId IS NULL
+            @scopeUserId IS NULL
             OR EXISTS (
-              SELECT 1
-              FROM dbo.event_program_review_team_members member
-              WHERE member.program_id = s.program_id
-                AND member.user_id = @leaderUserId
-                AND member.team_role = 'leader'
+              SELECT 1 FROM dbo.event_program_staff_assignments staff
+              WHERE staff.event_id = s.event_id AND staff.user_id = @scopeUserId AND staff.is_active = 1
+                AND (staff.program_id IS NULL OR staff.program_id = s.program_id)
+                AND staff.staff_role = 'supervisor'
+            )
+            OR EXISTS (
+              SELECT 1 FROM dbo.review_assignments assignment
+              INNER JOIN dbo.event_review_teams team ON team.id = assignment.review_team_id AND team.is_active = 1
+              WHERE assignment.submission_id = s.id AND team.leader_user_id = @scopeUserId
+            )
+            OR EXISTS (
+              SELECT 1 FROM dbo.review_assignments assignment
+              WHERE assignment.submission_id = s.id AND assignment.reviewer_user_id = @scopeUserId
+            )
+            OR EXISTS (
+              SELECT 1 FROM dbo.event_evaluator_assignments evaluation_assignment
+              WHERE evaluation_assignment.submission_id = s.id
+                AND evaluation_assignment.evaluator_user_id = @scopeUserId
+                AND evaluation_assignment.status <> 'cancelled'
             )
           )
         ORDER BY s.created_at DESC

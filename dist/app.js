@@ -25,6 +25,7 @@ const payments_routes_1 = require("./modules/payments/presentation/payments.rout
 const registrations_routes_1 = require("./modules/registrations/presentation/registrations.routes");
 const reports_routes_1 = require("./modules/reports/presentation/reports.routes");
 const reviews_routes_1 = require("./modules/reviews/presentation/reviews.routes");
+const evaluations_routes_1 = require("./modules/reviews/presentation/evaluations.routes");
 const saas_routes_1 = require("./modules/saas/presentation/saas.routes");
 const site_data_routes_1 = require("./modules/site-data/presentation/site-data.routes");
 const site_studio_routes_1 = require("./modules/site-studio/presentation/site-studio.routes");
@@ -80,6 +81,8 @@ function createApp() {
     app.use('/api/me', submissions_routes_1.mySubmissionsRouter);
     app.use('/api', reviews_routes_1.reviewsRouter);
     app.use('/api/me', reviews_routes_1.myReviewsRouter);
+    app.use('/api', evaluations_routes_1.evaluationsRouter);
+    app.use('/api/me', evaluations_routes_1.myEvaluationsRouter);
     app.use('/api', communications_routes_1.communicationsRouter);
     app.use('/api/events', reports_routes_1.reportsRouter);
     app.use('/api/events', contact_messages_routes_1.contactMessagesRouter);

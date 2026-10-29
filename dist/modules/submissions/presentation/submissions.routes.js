@@ -12,6 +12,7 @@ const files_repository_1 = require("../../files/infrastructure/repositories/file
 const authenticate_middleware_1 = require("../../iam/presentation/middlewares/authenticate.middleware");
 const require_permission_middleware_1 = require("../../iam/presentation/middlewares/require-permission.middleware");
 const submissions_repository_1 = require("../infrastructure/repositories/submissions.repository");
+const academic_workflow_repository_1 = require("../../reviews/infrastructure/repositories/academic-workflow.repository");
 const submission_schemas_1 = require("./schemas/submission.schemas");
 exports.submissionsRouter = (0, express_1.Router)();
 exports.mySubmissionsRouter = (0, express_1.Router)();
@@ -19,6 +20,7 @@ exports.submissionTypesRouter = (0, express_1.Router)();
 const submissionsRepository = new submissions_repository_1.SubmissionsRepository();
 const eventsRepository = new events_repository_1.EventsRepository();
 const emailService = new email_service_1.EmailService();
+const academicWorkflowRepository = new academic_workflow_repository_1.AcademicWorkflowRepository();
 const filesRepository = new files_repository_1.FilesRepository();
 const fileStorageService = new file_storage_service_1.FileStorageService();
 exports.submissionTypesRouter.post('/:eventId/submission-types', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('submissions.manage'), (0, async_handler_1.asyncHandler)(async (req, res) => {
@@ -59,13 +61,17 @@ exports.submissionTypesRouter.post('/:eventId/submissions', authenticate_middlew
     });
     return (0, api_response_1.sendSuccess)(res, 'Submission created successfully', submission, 201);
 }));
-exports.submissionTypesRouter.get('/:eventId/submissions', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('submissions.read'), (0, async_handler_1.asyncHandler)(async (req, res) => {
+exports.submissionTypesRouter.get('/:eventId/submissions', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = submission_schemas_1.submissionEventParamsSchema.parse(req.params);
+    const unrestricted = req.user.permissions.includes('submissions.read');
+    if (!unrestricted && !await academicWorkflowRepository.hasEventAccess(eventId, req.user.id)) {
+        throw new app_error_1.AppError('No tienes acceso académico a este evento.', 403, 'ACADEMIC_SCOPE_FORBIDDEN');
+    }
     const submissions = await submissionsRepository.listByEvent(eventId, {
         programId: typeof req.query.programId === 'string' ? req.query.programId : null,
         submissionTypeId: typeof req.query.submissionTypeId === 'string' ? req.query.submissionTypeId : null,
         status: typeof req.query.status === 'string' ? req.query.status : null,
-        leaderUserId: req.user.permissions.includes('submissions.manage') ? null : req.user.id,
+        scopeUserId: unrestricted ? null : req.user.id,
     });
     return (0, api_response_1.sendSuccess)(res, 'Event submissions retrieved successfully', submissions);
 }));

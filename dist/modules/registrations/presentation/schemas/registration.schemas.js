@@ -153,6 +153,10 @@ exports.createEventMaterialSchema = zod_1.z.object({
     registrationTypeId: zod_1.z.string().uuid().nullable().optional(),
     isActive: zod_1.z.boolean().optional(),
     sortOrder: zod_1.z.number().int().min(0).optional(),
+    targetRoles: zod_1.z.array(zod_1.z.enum([
+        'supervisor', 'leader', 'reviewer', 'evaluator',
+        'participant', 'speaker', 'keynote_speaker', 'advisor', 'team_member',
+    ])).max(9).optional(),
 });
 exports.updateEventMaterialSchema = exports.createEventMaterialSchema.partial();
 const certificateTemplateSchema = zod_1.z.object({

@@ -35,6 +35,7 @@ export declare class ReviewsRepository {
     allAssignedReviewsSubmitted(submissionId: string): Promise<boolean>;
     assignReviewer(input: {
         submissionId: string;
+        reviewTeamId: string;
         reviewerUserId: string;
         assignedBy: string;
         rubricId?: string;
