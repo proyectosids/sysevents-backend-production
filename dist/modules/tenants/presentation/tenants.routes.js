@@ -37,7 +37,7 @@ async function syncTenantRoles(userId) {
     if (await tenantsRepository.userHasTenantRole(userId, ['owner', 'admin'])) {
         await iamRepository.assignRoleToUserByName(userId, 'tenant_owner');
     }
-    if (await tenantsRepository.userHasTenantRole(userId, ['reviewer'])) {
+    if (await tenantsRepository.userHasTenantRole(userId, ['reviewer']) || await tenantsRepository.userHasAcademicRole(userId, 'reviewer')) {
         await iamRepository.assignRoleToUserByName(userId, 'academic_reviewer');
     }
 }
@@ -159,6 +159,7 @@ exports.tenantsRouter.post('/:id/users', (0, require_permission_middleware_1.req
         userId: user.id,
         tenantRole: input.tenantRole,
     });
+    await tenantsRepository.replaceAcademicRoles(id, user.id, input.academicRoles);
     await syncTenantRoles(user.id);
     const invitation = await sendTenantInvitation({
         tenantId: id,
@@ -198,6 +199,9 @@ exports.tenantsRouter.patch('/:id/users/:userId', (0, require_permission_middlew
         userId,
         tenantRole: input.tenantRole,
     });
+    if (input.academicRoles) {
+        await tenantsRepository.replaceAcademicRoles(id, userId, input.academicRoles);
+    }
     await syncTenantRoles(userId);
     return (0, api_response_1.sendSuccess)(res, 'Tenant user role updated successfully');
 }));

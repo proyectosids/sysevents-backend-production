@@ -13,9 +13,12 @@ exports.saveProgramReviewTeamSchema = zod_1.z.object({
     name: zod_1.z.string().trim().min(2).max(180).default('Equipo principal'),
     leaderUserId: zod_1.z.string().uuid(),
     reviewerUserIds: zod_1.z.array(zod_1.z.string().uuid()).default([]),
+    allowLeaderRoleOverride: zod_1.z.boolean().default(false),
+    allowReviewerRoleOverride: zod_1.z.boolean().default(false),
 });
 exports.saveProgramSupervisorSchema = zod_1.z.object({
     userId: zod_1.z.string().uuid(),
+    allowRoleOverride: zod_1.z.boolean().default(false),
 });
 exports.reviewSubmissionParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });
 exports.reviewIdParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });

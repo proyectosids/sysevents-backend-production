@@ -9,7 +9,10 @@ export declare class AcademicWorkflowRepository {
             tenantId: string;
         };
         programs: sql.IRecordSet<any>;
-        members: sql.IRecordSet<any> | never[];
+        members: {
+            academicRoles: any;
+            academicRolesJson: undefined;
+        }[];
     } | null>;
     hasEventAccess(eventId: string, userId: string): Promise<boolean>;
     isSupervisor(eventId: string, programId: string | null, userId: string): Promise<boolean>;
@@ -44,12 +47,15 @@ export declare class AcademicWorkflowRepository {
         name: string;
         leaderUserId: string;
         reviewerUserIds: string[];
+        allowLeaderRoleOverride: boolean;
+        allowReviewerRoleOverride: boolean;
         changedBy: string;
     }): Promise<string>;
     saveSupervisor(input: {
         eventId: string;
         programId?: string | null;
         userId: string;
+        allowRoleOverride: boolean;
         assignedBy: string;
     }): Promise<void>;
     canAssignReviewer(submissionId: string, teamId: string, reviewerUserId: string, userId: string): Promise<boolean>;

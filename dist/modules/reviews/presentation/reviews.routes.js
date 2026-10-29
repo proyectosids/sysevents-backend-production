@@ -65,6 +65,8 @@ exports.reviewsRouter.put('/events/:eventId/programs/:programId/review-team', au
         name: input.name,
         leaderUserId: input.leaderUserId,
         reviewerUserIds: input.reviewerUserIds,
+        allowLeaderRoleOverride: input.allowLeaderRoleOverride,
+        allowReviewerRoleOverride: input.allowReviewerRoleOverride,
         changedBy: req.user.id,
     });
     return (0, api_response_1.sendSuccess)(res, 'Program review team saved successfully', { teamId: saved });
@@ -88,7 +90,7 @@ exports.reviewsRouter.get('/events/:eventId/evaluators', authenticate_middleware
 exports.reviewsRouter.put('/events/:eventId/programs/:programId/supervisor', authenticate_middleware_1.authenticateMiddleware, (0, require_permission_middleware_1.requirePermission)('submissions.manage'), (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId, programId } = review_schemas_1.reviewTeamProgramParamsSchema.parse(req.params);
     const input = review_schemas_1.saveProgramSupervisorSchema.parse(req.body);
-    await academicWorkflowRepository.saveSupervisor({ eventId, programId, userId: input.userId, assignedBy: req.user.id });
+    await academicWorkflowRepository.saveSupervisor({ eventId, programId, userId: input.userId, allowRoleOverride: input.allowRoleOverride, assignedBy: req.user.id });
     return (0, api_response_1.sendSuccess)(res, 'Program supervisor saved successfully');
 }));
 exports.reviewsRouter.post('/submissions/:id/assign-reviewer', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {

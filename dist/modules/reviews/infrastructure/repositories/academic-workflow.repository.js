@@ -84,13 +84,25 @@ class AcademicWorkflowRepository {
             .input('tenantId', mssql_1.default.UniqueIdentifier, event.recordset[0].tenantId)
             .query(`
         SELECT membership.user_id AS userId, membership.tenant_role AS tenantRole,
-          person.first_name AS firstName, person.last_name AS lastName, person.email
+          person.first_name AS firstName, person.last_name AS lastName, person.email,
+          COALESCE((
+            SELECT profile.academic_role AS academicRole
+            FROM dbo.tenant_user_academic_roles profile
+            WHERE profile.tenant_id = membership.tenant_id AND profile.user_id = membership.user_id
+            ORDER BY profile.academic_role
+            FOR JSON PATH
+          ), '[]') AS academicRolesJson
         FROM dbo.tenant_users membership
         INNER JOIN dbo.users person ON person.id = membership.user_id AND person.status = 'active'
         WHERE membership.tenant_id = @tenantId
         ORDER BY person.first_name, person.last_name
       `) : { recordset: [] };
-        return { event: event.recordset[0], programs: programs.recordset, members: members.recordset };
+        const mappedMembers = members.recordset.map((member) => ({
+            ...member,
+            academicRoles: JSON.parse(String(member.academicRolesJson || '[]')).map((item) => item.academicRole),
+            academicRolesJson: undefined,
+        }));
+        return { event: event.recordset[0], programs: programs.recordset, members: mappedMembers };
     }
     async hasEventAccess(eventId, userId) {
         const pool = await (0, database_1.getSqlPool)();
@@ -308,6 +320,20 @@ class AcademicWorkflowRepository {
         `);
             if (!membership.recordset[0])
                 throw new app_error_1.AppError('El líder debe pertenecer a la organización del evento.', 400, 'LEADER_NOT_IN_TENANT');
+            if (!input.allowLeaderRoleOverride) {
+                const leaderProfile = await transaction.request()
+                    .input('tenantId', mssql_1.default.UniqueIdentifier, membership.recordset[0].tenant_id)
+                    .input('userId', mssql_1.default.UniqueIdentifier, input.leaderUserId)
+                    .query(`
+            SELECT CASE WHEN EXISTS (
+              SELECT 1 FROM dbo.tenant_user_academic_roles
+              WHERE tenant_id = @tenantId AND user_id = @userId AND academic_role = 'leader'
+            ) THEN 1 ELSE 0 END AS allowed
+          `);
+                if (!leaderProfile.recordset[0]?.allowed) {
+                    throw new app_error_1.AppError('La persona seleccionada no tiene habilitado el perfil Líder. Activa la excepción para este programa si deseas utilizarla.', 409, 'LEADER_PROFILE_REQUIRED');
+                }
+            }
             const allUsers = Array.from(new Set([input.leaderUserId, ...input.reviewerUserIds]));
             for (const userId of allUsers) {
                 const belongs = await transaction.request()
@@ -316,6 +342,22 @@ class AcademicWorkflowRepository {
                     .query('SELECT CASE WHEN EXISTS (SELECT 1 FROM dbo.tenant_users WHERE tenant_id = @tenantId AND user_id = @userId) THEN 1 ELSE 0 END AS allowed');
                 if (!belongs.recordset[0]?.allowed)
                     throw new app_error_1.AppError('Todos los integrantes deben pertenecer a la organización del evento.', 400, 'TEAM_MEMBER_NOT_IN_TENANT');
+            }
+            const reviewerIds = Array.from(new Set(input.reviewerUserIds.filter((id) => id !== input.leaderUserId)));
+            if (!input.allowReviewerRoleOverride && reviewerIds.length) {
+                const reviewerProfiles = await transaction.request()
+                    .input('tenantId', mssql_1.default.UniqueIdentifier, membership.recordset[0].tenant_id)
+                    .input('usersJson', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify(reviewerIds))
+                    .query(`
+            SELECT COUNT(DISTINCT profile.user_id) AS total
+            FROM dbo.tenant_user_academic_roles profile
+            INNER JOIN OPENJSON(@usersJson) WITH (user_id UNIQUEIDENTIFIER '$') selected
+              ON selected.user_id = profile.user_id
+            WHERE profile.tenant_id = @tenantId AND profile.academic_role = 'reviewer'
+          `);
+                if ((reviewerProfiles.recordset[0]?.total ?? 0) !== reviewerIds.length) {
+                    throw new app_error_1.AppError('Uno o más integrantes no tienen habilitado el perfil Revisor. Activa la excepción para este programa si deseas utilizarlos.', 409, 'REVIEWER_PROFILE_REQUIRED');
+                }
             }
             let teamId = input.teamId;
             if (teamId) {
@@ -392,6 +434,25 @@ class AcademicWorkflowRepository {
         `);
             if (!valid.recordset[0]?.allowed)
                 throw new app_error_1.AppError('El supervisor debe pertenecer a la organización y al alcance indicado.', 400, 'SUPERVISOR_SCOPE_INVALID');
+            if (!input.allowRoleOverride) {
+                const profile = await transaction.request()
+                    .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
+                    .input('userId', mssql_1.default.UniqueIdentifier, input.userId)
+                    .query(`
+            SELECT CASE WHEN EXISTS (
+              SELECT 1
+              FROM dbo.events event
+              INNER JOIN dbo.tenant_user_academic_roles academic_role
+                ON academic_role.tenant_id = event.tenant_id
+               AND academic_role.user_id = @userId
+               AND academic_role.academic_role = 'supervisor'
+              WHERE event.id = @eventId
+            ) THEN 1 ELSE 0 END AS allowed
+          `);
+                if (!profile.recordset[0]?.allowed) {
+                    throw new app_error_1.AppError('La persona seleccionada no tiene habilitado el perfil Supervisor. Activa la excepción para este programa si deseas utilizarla.', 409, 'SUPERVISOR_PROFILE_REQUIRED');
+                }
+            }
             await transaction.request()
                 .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
                 .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)

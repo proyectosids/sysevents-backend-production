@@ -233,15 +233,15 @@ export declare const createEventMaterialSchema: z.ZodObject<{
     isActive: z.ZodOptional<z.ZodBoolean>;
     sortOrder: z.ZodOptional<z.ZodNumber>;
     targetRoles: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        supervisor: "supervisor";
+        leader: "leader";
         reviewer: "reviewer";
+        evaluator: "evaluator";
         advisor: "advisor";
         team_member: "team_member";
         participant: "participant";
         speaker: "speaker";
         keynote_speaker: "keynote_speaker";
-        supervisor: "supervisor";
-        leader: "leader";
-        evaluator: "evaluator";
     }>>>;
 }, z.core.$strip>;
 export declare const updateEventMaterialSchema: z.ZodObject<{
@@ -268,15 +268,15 @@ export declare const updateEventMaterialSchema: z.ZodObject<{
     isActive: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
     sortOrder: z.ZodOptional<z.ZodOptional<z.ZodNumber>>;
     targetRoles: z.ZodOptional<z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        supervisor: "supervisor";
+        leader: "leader";
         reviewer: "reviewer";
+        evaluator: "evaluator";
         advisor: "advisor";
         team_member: "team_member";
         participant: "participant";
         speaker: "speaker";
         keynote_speaker: "keynote_speaker";
-        supervisor: "supervisor";
-        leader: "leader";
-        evaluator: "evaluator";
     }>>>>;
 }, z.core.$strip>;
 export declare const createCertificateTemplateSchema: z.ZodObject<{

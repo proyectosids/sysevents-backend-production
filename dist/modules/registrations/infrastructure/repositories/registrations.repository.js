@@ -1569,56 +1569,74 @@ class RegistrationsRepository {
             .query(`
       DECLARE @issued INT = 0;
 
+      ;WITH eligible_registration_certificates AS (
+        SELECT template.event_id, registration.id AS registration_id, template.id AS template_id,
+          CONCAT(profile.first_name, ' ', profile.last_name) AS recipient_name,
+          profile.email AS recipient_email, template.target_role,
+          DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at) AS available_at,
+          ROW_NUMBER() OVER (
+            PARTITION BY registration.id, template.target_role, LOWER(LTRIM(RTRIM(profile.email)))
+            ORDER BY
+              CASE WHEN template.program_id IS NOT NULL THEN 1 ELSE 0 END DESC,
+              CASE WHEN template.registration_type_id IS NOT NULL THEN 1 ELSE 0 END DESC,
+              template.updated_at DESC, template.created_at DESC, template.id
+          ) AS candidate_rank
+        FROM dbo.event_certificate_templates template
+        LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
+        CROSS APPLY (
+          SELECT CASE
+            WHEN template.release_trigger = 'event_end' THEN template.event_end_at
+            ELSE COALESCE(agenda.ends_at, agenda.starts_at)
+          END AS ends_at
+        ) release_time
+        INNER JOIN dbo.event_settings settings ON settings.event_id = template.event_id
+        INNER JOIN dbo.event_registrations registration ON registration.event_id = template.event_id
+          AND (template.program_id IS NULL OR template.program_id = registration.program_id)
+          AND (template.registration_type_id IS NULL OR template.registration_type_id = registration.registration_type_id)
+          AND registration.user_id = @userId
+        INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
+        LEFT JOIN dbo.event_speakers speaker ON speaker.source_registration_id = registration.id AND speaker.deleted_at IS NULL
+        WHERE template.deleted_at IS NULL AND template.is_active = 1 AND template.auto_issue = 1
+          AND template.target_role IN ('participant','speaker','keynote_speaker')
+          AND registration.status IN ('confirmed','checked_in')
+          AND release_time.ends_at IS NOT NULL
+          AND DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at) <= SYSUTCDATETIME()
+          AND (template.target_role = 'participant'
+            OR (template.target_role = 'speaker' AND speaker.id IS NOT NULL)
+            OR (template.target_role = 'keynote_speaker' AND speaker.id IS NOT NULL
+              AND (LOWER(COALESCE(agenda.speaker_role, speaker.role, '')) LIKE '%magistral%'
+                OR LOWER(COALESCE(agenda.speaker_role, speaker.role, '')) LIKE '%keynote%')))
+          AND (agenda.speaker_email IS NULL OR template.target_role = 'participant' OR LOWER(agenda.speaker_email) = LOWER(profile.email))
+          AND (agenda.speaker_id IS NULL OR template.target_role = 'participant' OR agenda.speaker_id = speaker.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.event_certificates certificate
+            WHERE certificate.registration_id = registration.id
+              AND certificate.recipient_role = template.target_role
+              AND LOWER(LTRIM(RTRIM(certificate.recipient_email))) = LOWER(LTRIM(RTRIM(profile.email)))
+          )
+      )
       INSERT INTO dbo.event_certificates (
         event_id, registration_id, template_id, certificate_code, recipient_name,
         recipient_email, recipient_role, available_at, issued_at
       )
-      SELECT template.event_id, registration.id, template.id,
+      SELECT event_id, registration_id, template_id,
         CONCAT('SYSEVENTS-', UPPER(LEFT(REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', ''), 20))),
-        CONCAT(profile.first_name, ' ', profile.last_name), profile.email, template.target_role,
-        DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at), SYSUTCDATETIME()
-      FROM dbo.event_certificate_templates template
-      LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
-      CROSS APPLY (
-        SELECT CASE
-          WHEN template.release_trigger = 'event_end' THEN template.event_end_at
-          ELSE COALESCE(agenda.ends_at, agenda.starts_at)
-        END AS ends_at
-      ) release_time
-      INNER JOIN dbo.event_settings settings ON settings.event_id = template.event_id
-      INNER JOIN dbo.event_registrations registration ON registration.event_id = template.event_id
-        AND (template.program_id IS NULL OR template.program_id = registration.program_id)
-        AND (template.registration_type_id IS NULL OR template.registration_type_id = registration.registration_type_id)
-        AND registration.user_id = @userId
-      INNER JOIN dbo.participant_profiles profile ON profile.id = registration.participant_profile_id
-      LEFT JOIN dbo.event_speakers speaker ON speaker.source_registration_id = registration.id AND speaker.deleted_at IS NULL
-      WHERE template.deleted_at IS NULL AND template.is_active = 1 AND template.auto_issue = 1
-        AND template.target_role IN ('participant','speaker','keynote_speaker')
-        AND registration.status IN ('confirmed','checked_in')
-        AND release_time.ends_at IS NOT NULL
-        AND DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at) <= SYSUTCDATETIME()
-        AND (template.target_role = 'participant'
-          OR (template.target_role = 'speaker' AND speaker.id IS NOT NULL)
-          OR (template.target_role = 'keynote_speaker' AND speaker.id IS NOT NULL
-            AND (LOWER(COALESCE(agenda.speaker_role, speaker.role, '')) LIKE '%magistral%'
-              OR LOWER(COALESCE(agenda.speaker_role, speaker.role, '')) LIKE '%keynote%')))
-        AND (agenda.speaker_email IS NULL OR template.target_role = 'participant' OR LOWER(agenda.speaker_email) = LOWER(profile.email))
-        AND (agenda.speaker_id IS NULL OR template.target_role = 'participant' OR agenda.speaker_id = speaker.id)
-        AND NOT EXISTS (
-          SELECT 1 FROM dbo.event_certificates certificate
-          WHERE certificate.registration_id = registration.id AND certificate.template_id = template.id
-            AND certificate.recipient_role = template.target_role AND certificate.recipient_email = profile.email
-        );
+        recipient_name, recipient_email, target_role, available_at, SYSUTCDATETIME()
+      FROM eligible_registration_certificates
+      WHERE candidate_rank = 1;
       SET @issued += @@ROWCOUNT;
 
-      INSERT INTO dbo.event_certificates (
-        event_id, registration_id, template_id, certificate_code, recipient_name,
-        recipient_email, recipient_role, available_at, issued_at
-      )
-      SELECT template.event_id, registration.id, template.id,
-        CONCAT('SYSEVENTS-', UPPER(LEFT(REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', ''), 20))),
-        member.full_name, member.email, template.target_role,
-        DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at), SYSUTCDATETIME()
+      ;WITH eligible_team_certificates AS (
+      SELECT template.event_id, registration.id AS registration_id, template.id AS template_id,
+        member.full_name AS recipient_name, member.email AS recipient_email, template.target_role,
+        DATEADD(MINUTE, settings.certificate_delay_minutes, release_time.ends_at) AS available_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY registration.id, template.target_role, LOWER(LTRIM(RTRIM(member.email)))
+          ORDER BY
+            CASE WHEN template.program_id IS NOT NULL THEN 1 ELSE 0 END DESC,
+            CASE WHEN template.registration_type_id IS NOT NULL THEN 1 ELSE 0 END DESC,
+            template.updated_at DESC, template.created_at DESC, template.id
+        ) AS candidate_rank
       FROM dbo.event_certificate_templates template
       LEFT JOIN dbo.event_agenda_items agenda ON agenda.id = template.agenda_item_id AND agenda.event_id = template.event_id
       CROSS APPLY (
@@ -1645,9 +1663,20 @@ class RegistrationsRepository {
         AND (agenda.speaker_id IS NULL OR agenda.speaker_id = speaker.id)
         AND NOT EXISTS (
           SELECT 1 FROM dbo.event_certificates certificate
-          WHERE certificate.registration_id = registration.id AND certificate.template_id = template.id
-            AND certificate.recipient_role = template.target_role AND certificate.recipient_email = member.email
-        );
+          WHERE certificate.registration_id = registration.id
+            AND certificate.recipient_role = template.target_role
+            AND LOWER(LTRIM(RTRIM(certificate.recipient_email))) = LOWER(LTRIM(RTRIM(member.email)))
+        )
+      )
+      INSERT INTO dbo.event_certificates (
+        event_id, registration_id, template_id, certificate_code, recipient_name,
+        recipient_email, recipient_role, available_at, issued_at
+      )
+      SELECT event_id, registration_id, template_id,
+        CONCAT('SYSEVENTS-', UPPER(LEFT(REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', ''), 20))),
+        recipient_name, recipient_email, target_role, available_at, SYSUTCDATETIME()
+      FROM eligible_team_certificates
+      WHERE candidate_rank = 1;
       SET @issued += @@ROWCOUNT;
       SELECT @issued AS issued;
       `);
@@ -1909,6 +1938,21 @@ class RegistrationsRepository {
         }
         if (['team_advisor', 'team_member'].includes(eligible.recipient_source)) {
             throw new app_error_1.AppError('Las constancias del equipo se generan automáticamente desde los integrantes registrados.', 409, 'TEAM_CERTIFICATE_AUTO_ISSUANCE_REQUIRED');
+        }
+        const existingCertificate = await pool.request()
+            .input('registrationId', mssql_1.default.UniqueIdentifier, registrationId)
+            .input('recipientRole', mssql_1.default.NVarChar(40), eligible.target_role)
+            .input('recipientEmail', mssql_1.default.NVarChar(255), eligible.recipient_email)
+            .query(`
+        SELECT TOP 1 id
+        FROM dbo.event_certificates
+        WHERE registration_id = @registrationId
+          AND recipient_role = @recipientRole
+          AND LOWER(LTRIM(RTRIM(recipient_email))) = LOWER(LTRIM(RTRIM(@recipientEmail)))
+        ORDER BY issued_at DESC
+      `);
+        if (existingCertificate.recordset[0]) {
+            throw new app_error_1.AppError('Ya existe una constancia emitida para este destinatario y función.', 409, 'CERTIFICATE_ALREADY_ISSUED');
         }
         const code = `SYSEVENTS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
         const result = await pool

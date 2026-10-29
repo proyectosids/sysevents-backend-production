@@ -27,6 +27,7 @@ function mapTenantUser(row) {
         tenantId: row.tenant_id,
         userId: row.user_id,
         tenantRole: row.tenant_role,
+        academicRoles: JSON.parse(row.academic_roles_json || '[]').map((item) => item.academicRole),
         createdAt: row.created_at,
         accessStatus,
         user: {
@@ -170,6 +171,33 @@ class TenantsRepository {
             ? { tenantId, userId, tenantRole: result.recordset[0].tenant_role }
             : null;
     }
+    async replaceAcademicRoles(tenantId, userId, academicRoles) {
+        const pool = await (0, database_1.getSqlPool)();
+        await pool.request()
+            .input('tenantId', mssql_1.default.UniqueIdentifier, tenantId)
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .input('rolesJson', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify(academicRoles))
+            .query(`
+        DELETE FROM dbo.tenant_user_academic_roles
+        WHERE tenant_id = @tenantId AND user_id = @userId;
+
+        INSERT INTO dbo.tenant_user_academic_roles (tenant_id, user_id, academic_role)
+        SELECT @tenantId, @userId, selected.academic_role
+        FROM OPENJSON(@rolesJson) WITH (academic_role NVARCHAR(30) '$') selected;
+      `);
+    }
+    async userHasAcademicRole(userId, academicRole) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .input('academicRole', mssql_1.default.NVarChar(30), academicRole)
+            .query(`
+        SELECT COUNT(1) AS total
+        FROM dbo.tenant_user_academic_roles
+        WHERE user_id = @userId AND academic_role = @academicRole
+      `);
+        return (result.recordset[0]?.total ?? 0) > 0;
+    }
     async listTenantUsers(tenantId) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool
@@ -187,6 +215,13 @@ class TenantsRepository {
           u.status AS user_status,
           invitation.expires_at AS invitation_expires_at,
           invitation.accepted_at AS invitation_accepted_at
+          , COALESCE((
+              SELECT profile.academic_role AS academicRole
+              FROM dbo.tenant_user_academic_roles profile
+              WHERE profile.tenant_id = tu.tenant_id AND profile.user_id = tu.user_id
+              ORDER BY profile.academic_role
+              FOR JSON PATH
+            ), '[]') AS academic_roles_json
         FROM dbo.tenant_users tu
         INNER JOIN dbo.users u ON u.id = tu.user_id
         OUTER APPLY (

@@ -20,6 +20,8 @@ export declare class TenantsRepository {
         userId: string;
         tenantRole: string;
     } | null>;
+    replaceAcademicRoles(tenantId: string, userId: string, academicRoles: string[]): Promise<void>;
+    userHasAcademicRole(userId: string, academicRole: string): Promise<boolean>;
     listTenantUsers(tenantId: string): Promise<(TenantUser & {
         user: {
             id: string;

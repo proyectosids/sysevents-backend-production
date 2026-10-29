@@ -26,9 +26,15 @@ export declare const addTenantUserSchema: z.ZodObject<{
     tenantRole: z.ZodDefault<z.ZodEnum<{
         owner: "owner";
         admin: "admin";
-        member: "member";
         reviewer: "reviewer";
+        member: "member";
     }>>;
+    academicRoles: z.ZodDefault<z.ZodArray<z.ZodEnum<{
+        supervisor: "supervisor";
+        leader: "leader";
+        reviewer: "reviewer";
+        evaluator: "evaluator";
+    }>>>;
 }, z.core.$strip>;
 export declare const tenantUserParamsSchema: z.ZodObject<{
     id: z.ZodString;
@@ -38,9 +44,15 @@ export declare const updateTenantUserSchema: z.ZodObject<{
     tenantRole: z.ZodEnum<{
         owner: "owner";
         admin: "admin";
-        member: "member";
         reviewer: "reviewer";
+        member: "member";
     }>;
+    academicRoles: z.ZodOptional<z.ZodArray<z.ZodEnum<{
+        supervisor: "supervisor";
+        leader: "leader";
+        reviewer: "reviewer";
+        evaluator: "evaluator";
+    }>>>;
 }, z.core.$strip>;
 export declare const updateTenantUserProfileSchema: z.ZodObject<{
     email: z.ZodString;

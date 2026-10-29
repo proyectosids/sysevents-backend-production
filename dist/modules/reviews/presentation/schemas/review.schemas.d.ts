@@ -11,9 +11,12 @@ export declare const saveProgramReviewTeamSchema: z.ZodObject<{
     name: z.ZodDefault<z.ZodString>;
     leaderUserId: z.ZodString;
     reviewerUserIds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    allowLeaderRoleOverride: z.ZodDefault<z.ZodBoolean>;
+    allowReviewerRoleOverride: z.ZodDefault<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const saveProgramSupervisorSchema: z.ZodObject<{
     userId: z.ZodString;
+    allowRoleOverride: z.ZodDefault<z.ZodBoolean>;
 }, z.core.$strip>;
 export declare const reviewSubmissionParamsSchema: z.ZodObject<{
     id: z.ZodString;

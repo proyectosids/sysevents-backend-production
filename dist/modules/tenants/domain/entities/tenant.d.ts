@@ -11,5 +11,6 @@ export type TenantUser = {
     tenantId: string;
     userId: string;
     tenantRole: string;
+    academicRoles?: string[];
     createdAt: Date;
 };

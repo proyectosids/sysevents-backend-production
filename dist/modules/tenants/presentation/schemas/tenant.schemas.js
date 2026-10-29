@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.acceptTenantInvitationSchema = exports.invitationTokenParamsSchema = exports.updateTenantUserProfileSchema = exports.updateTenantUserSchema = exports.tenantUserParamsSchema = exports.addTenantUserSchema = exports.updateTenantSchema = exports.createTenantSchema = exports.tenantIdParamsSchema = void 0;
 const zod_1 = require("zod");
+const academicRoleSchema = zod_1.z.enum(['supervisor', 'leader', 'reviewer', 'evaluator']);
 exports.tenantIdParamsSchema = zod_1.z.object({
     id: zod_1.z.string().uuid(),
 });
@@ -21,6 +22,7 @@ exports.addTenantUserSchema = zod_1.z.object({
     firstName: zod_1.z.string().min(2).max(120).optional(),
     lastName: zod_1.z.string().min(2).max(120).optional(),
     tenantRole: zod_1.z.enum(['owner', 'admin', 'member', 'reviewer']).default('member'),
+    academicRoles: zod_1.z.array(academicRoleSchema).max(4).default([]),
 }).refine((value) => value.userId || value.email, {
     message: 'userId or email is required',
 });
@@ -29,6 +31,7 @@ exports.tenantUserParamsSchema = exports.tenantIdParamsSchema.extend({
 });
 exports.updateTenantUserSchema = zod_1.z.object({
     tenantRole: zod_1.z.enum(['owner', 'admin', 'member', 'reviewer']),
+    academicRoles: zod_1.z.array(academicRoleSchema).max(4).optional(),
 });
 exports.updateTenantUserProfileSchema = zod_1.z.object({
     email: zod_1.z.string().email().max(255),
