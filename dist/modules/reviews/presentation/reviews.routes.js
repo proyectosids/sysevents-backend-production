@@ -29,6 +29,15 @@ const communicationsRepository = new communications_repository_1.CommunicationsR
 exports.myReviewsRouter.get('/academic-scopes', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     return (0, api_response_1.sendSuccess)(res, 'Academic scopes retrieved successfully', await academicWorkflowRepository.listMyScopes(req.user.id));
 }));
+exports.reviewsRouter.get('/events/:eventId/leader-dashboard', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = review_schemas_1.reviewTeamEventParamsSchema.parse(req.params);
+    const scopes = await academicWorkflowRepository.listMyScopes(req.user.id);
+    const isLeader = scopes.some((scope) => scope.eventId === eventId && scope.role === 'leader');
+    if (!isLeader && !req.user.permissions.includes('submissions.manage')) {
+        throw new app_error_1.AppError('Sólo los líderes asignados pueden consultar este tablero.', 403, 'LEADER_REQUIRED');
+    }
+    return (0, api_response_1.sendSuccess)(res, 'Leader dashboard retrieved successfully', await academicWorkflowRepository.getLeaderDashboard(eventId, req.user.id));
+}));
 exports.reviewsRouter.get('/events/:eventId/review-teams', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = review_schemas_1.reviewTeamEventParamsSchema.parse(req.params);
     const unrestricted = req.user.permissions.includes('submissions.manage');

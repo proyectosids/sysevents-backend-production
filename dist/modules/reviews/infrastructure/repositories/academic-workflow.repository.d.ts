@@ -2,6 +2,47 @@ import sql from 'mssql';
 export type AcademicScopeRole = 'supervisor' | 'leader' | 'reviewer' | 'evaluator';
 export declare class AcademicWorkflowRepository {
     listMyScopes(userId: string): Promise<sql.IRecordSet<any>>;
+    getLeaderDashboard(eventId: string, userId: string): Promise<{
+        eventId: string;
+        eventName: string;
+        programs: {
+            teamId: string;
+            teamName: string;
+            programId: string;
+            programName: string;
+            eventName: string;
+            reviewers: Array<Record<string, unknown>>;
+        }[];
+        submissions: {
+            id: string;
+            title: string;
+            status: string;
+            createdAt: unknown;
+            programId: string;
+            programName: string;
+            submissionTypeId: string;
+            submissionTypeName: string;
+            teamId: string;
+            teamName: string;
+            assignments: Array<{
+                id: string;
+                status: string;
+                dueAt: string | null;
+                submittedAt: string | null;
+                reviewerUserId: string;
+                reviewerFirstName: string;
+                reviewerLastName: string;
+                reviewerEmail: string;
+            }>;
+        }[];
+        summary: {
+            totalSubmissions: number;
+            unassignedSubmissions: number;
+            reviewsInProgress: number;
+            awaitingLeader: number;
+            forwardedToSupervisor: number;
+        };
+    }>;
     getEventContext(eventId: string, userId: string, includeMembers: boolean, unrestrictedPrograms?: boolean): Promise<{
         event: {
             id: string;

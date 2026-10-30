@@ -44,6 +44,95 @@ class AcademicWorkflowRepository {
       `);
         return result.recordset;
     }
+    async getLeaderDashboard(eventId, userId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .query(`
+        SELECT team.id AS teamId, team.name AS teamName, program.id AS programId, program.name AS programName,
+          event.name AS eventName,
+          COALESCE((
+            SELECT reviewer.id AS userId, reviewer.first_name AS firstName, reviewer.last_name AS lastName,
+              reviewer.email, member.created_at AS joinedAt
+            FROM dbo.event_review_team_members member
+            INNER JOIN dbo.users reviewer ON reviewer.id = member.user_id
+            WHERE member.team_id = team.id AND member.is_active = 1
+            ORDER BY reviewer.first_name, reviewer.last_name
+            FOR JSON PATH
+          ), '[]') AS reviewersJson
+        FROM dbo.event_review_teams team
+        INNER JOIN dbo.event_programs program ON program.id = team.program_id
+        INNER JOIN dbo.events event ON event.id = team.event_id
+        WHERE team.event_id = @eventId AND team.leader_user_id = @userId AND team.is_active = 1
+        ORDER BY program.sort_order, program.name, team.name;
+
+        SELECT submission.id, submission.title, submission.status, submission.created_at AS createdAt,
+          submission.program_id AS programId, program.name AS programName,
+          submission.submission_type_id AS submissionTypeId, submission_type.name AS submissionTypeName,
+          team.id AS teamId, team.name AS teamName,
+          COALESCE((
+            SELECT assignment.id, assignment.status, assignment.due_at AS dueAt,
+              assignment.submitted_at AS submittedAt, reviewer.id AS reviewerUserId,
+              reviewer.first_name AS reviewerFirstName, reviewer.last_name AS reviewerLastName,
+              reviewer.email AS reviewerEmail
+            FROM dbo.review_assignments assignment
+            INNER JOIN dbo.users reviewer ON reviewer.id = assignment.reviewer_user_id
+            WHERE assignment.submission_id = submission.id AND assignment.review_team_id = team.id
+            ORDER BY assignment.created_at
+            FOR JSON PATH
+          ), '[]') AS assignmentsJson
+        FROM dbo.submissions submission
+        INNER JOIN dbo.event_review_teams team
+          ON team.event_id = submission.event_id AND team.program_id = submission.program_id
+          AND team.leader_user_id = @userId AND team.is_active = 1
+        INNER JOIN dbo.event_programs program ON program.id = submission.program_id
+        INNER JOIN dbo.submission_types submission_type ON submission_type.id = submission.submission_type_id
+        WHERE submission.event_id = @eventId AND submission.deleted_at IS NULL AND submission.status <> 'draft'
+        ORDER BY CASE submission.status
+          WHEN 'submitted' THEN 0 WHEN 'resubmitted' THEN 0 WHEN 'under_review' THEN 1
+          WHEN 'changes_requested' THEN 2 WHEN 'accepted' THEN 3 WHEN 'rejected' THEN 3 ELSE 4 END,
+          submission.created_at DESC;
+      `);
+        const recordsets = result.recordsets;
+        const programRows = recordsets[0] ?? [];
+        const submissionRows = recordsets[1] ?? [];
+        const programs = programRows.map((row) => ({
+            teamId: String(row.teamId),
+            teamName: String(row.teamName),
+            programId: String(row.programId),
+            programName: String(row.programName),
+            eventName: String(row.eventName),
+            reviewers: JSON.parse(String(row.reviewersJson || '[]')),
+        }));
+        const submissions = submissionRows.map((row) => ({
+            id: String(row.id),
+            title: String(row.title),
+            status: String(row.status),
+            createdAt: row.createdAt,
+            programId: String(row.programId),
+            programName: String(row.programName),
+            submissionTypeId: String(row.submissionTypeId),
+            submissionTypeName: String(row.submissionTypeName),
+            teamId: String(row.teamId),
+            teamName: String(row.teamName),
+            assignments: JSON.parse(String(row.assignmentsJson || '[]')),
+        }));
+        const assignments = submissions.flatMap((submission) => submission.assignments);
+        return {
+            eventId,
+            eventName: programs[0]?.eventName ?? null,
+            programs,
+            submissions,
+            summary: {
+                totalSubmissions: submissions.length,
+                unassignedSubmissions: submissions.filter((submission) => submission.assignments.length === 0 && ['submitted', 'resubmitted'].includes(submission.status)).length,
+                reviewsInProgress: assignments.filter((assignment) => ['assigned', 'returned_to_reviewer'].includes(assignment.status)).length,
+                awaitingLeader: assignments.filter((assignment) => assignment.status === 'submitted_to_leader').length,
+                forwardedToSupervisor: assignments.filter((assignment) => assignment.status === 'forwarded_to_supervisor').length,
+            },
+        };
+    }
     async getEventContext(eventId, userId, includeMembers, unrestrictedPrograms = false) {
         const pool = await (0, database_1.getSqlPool)();
         const event = await pool.request()
@@ -178,9 +267,10 @@ class AcademicWorkflowRepository {
             .input('userId', mssql_1.default.UniqueIdentifier, userId)
             .query(`
         SELECT CASE WHEN EXISTS (
-          SELECT 1 FROM dbo.review_assignments assignment
-          INNER JOIN dbo.event_review_teams team ON team.id = assignment.review_team_id AND team.is_active = 1
-          WHERE assignment.submission_id = @submissionId AND team.leader_user_id = @userId
+          SELECT 1 FROM dbo.submissions submission
+          INNER JOIN dbo.event_review_teams team
+            ON team.event_id = submission.event_id AND team.program_id = submission.program_id AND team.is_active = 1
+          WHERE submission.id = @submissionId AND team.leader_user_id = @userId
         ) THEN 1 ELSE 0 END AS allowed
       `);
         return Boolean(result.recordset[0]?.allowed);

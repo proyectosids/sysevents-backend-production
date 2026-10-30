@@ -253,6 +253,11 @@ class SubmissionsRepository {
               WHERE assignment.submission_id = s.id AND team.leader_user_id = @scopeUserId
             )
             OR EXISTS (
+              SELECT 1 FROM dbo.event_review_teams team
+              WHERE team.event_id = s.event_id AND team.program_id = s.program_id
+                AND team.leader_user_id = @scopeUserId AND team.is_active = 1
+            )
+            OR EXISTS (
               SELECT 1 FROM dbo.review_assignments assignment
               WHERE assignment.submission_id = s.id AND assignment.reviewer_user_id = @scopeUserId
             )
