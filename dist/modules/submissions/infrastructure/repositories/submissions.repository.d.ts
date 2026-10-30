@@ -34,7 +34,7 @@ export declare class SubmissionsRepository {
         }>;
     }): Promise<Submission>;
     findById(id: string): Promise<Submission | null>;
-    listMine(userId: string): Promise<Submission[]>;
+    listMine(userId: string, eventId?: string | null): Promise<Submission[]>;
     listByEvent(eventId: string, filters?: {
         programId?: string | null;
         status?: string | null;

@@ -17,6 +17,8 @@ function mapSubmission(row) {
         knowledgeLineId: row.knowledge_line_id,
         registrationId: row.registration_id,
         ownerUserId: row.owner_user_id,
+        eventName: row.event_name ?? null,
+        eventSlug: row.event_slug ?? null,
         submissionTypeName: row.submission_type_name ?? null,
         programName: row.program_name ?? null,
         knowledgeAreaName: row.knowledge_area_name ?? null,
@@ -186,17 +188,20 @@ class SubmissionsRepository {
       `);
         return result.recordset[0] ? mapSubmission(result.recordset[0]) : null;
     }
-    async listMine(userId) {
+    async listMine(userId, eventId) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool
             .request()
             .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId ?? null)
             .query(`
-        SELECT s.*, st.name AS submission_type_name, p.name AS program_name,
+        SELECT s.*, e.name AS event_name, e.slug AS event_slug,
+          st.name AS submission_type_name, p.name AS program_name,
           area.name AS knowledge_area_name, line.name AS knowledge_line_name,
           decision.decision_notes AS latest_decision_notes, decision.decision AS latest_decision,
           author.full_name AS primary_author_name, author.email AS primary_author_email
         FROM dbo.submissions s
+        INNER JOIN dbo.events e ON e.id = s.event_id
         INNER JOIN dbo.submission_types st ON st.id = s.submission_type_id
         LEFT JOIN dbo.event_programs p ON p.id = s.program_id
         LEFT JOIN dbo.event_knowledge_areas area ON area.id = s.knowledge_area_id
@@ -204,6 +209,7 @@ class SubmissionsRepository {
         OUTER APPLY (SELECT TOP 1 decision, decision_notes FROM dbo.review_decisions WHERE submission_id = s.id ORDER BY created_at DESC) decision
         OUTER APPLY (SELECT TOP 1 full_name, email FROM dbo.submission_authors WHERE submission_id = s.id ORDER BY is_corresponding DESC, sort_order ASC) author
         WHERE s.owner_user_id = @userId AND s.deleted_at IS NULL
+          AND (@eventId IS NULL OR s.event_id = @eventId)
         ORDER BY s.created_at DESC
       `);
         return result.recordset.map(mapSubmission);

@@ -8,6 +8,8 @@ export type Submission = {
     knowledgeLineId: string | null;
     registrationId: string | null;
     ownerUserId: string;
+    eventName?: string | null;
+    eventSlug?: string | null;
     submissionTypeName?: string | null;
     programName?: string | null;
     knowledgeAreaName?: string | null;

@@ -1,10 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.attachSubmissionFileSchema = exports.updateSubmissionSchema = exports.createSubmissionSchema = exports.createSubmissionTypeSchema = exports.submissionTypeParamsSchema = exports.submissionIdParamsSchema = exports.submissionEventParamsSchema = void 0;
+exports.attachSubmissionFileSchema = exports.updateSubmissionSchema = exports.createSubmissionSchema = exports.createSubmissionTypeSchema = exports.mySubmissionsQuerySchema = exports.submissionTypeParamsSchema = exports.submissionIdParamsSchema = exports.submissionEventParamsSchema = void 0;
 const zod_1 = require("zod");
 exports.submissionEventParamsSchema = zod_1.z.object({ eventId: zod_1.z.string().uuid() });
 exports.submissionIdParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });
 exports.submissionTypeParamsSchema = exports.submissionEventParamsSchema.extend({ typeId: zod_1.z.string().uuid() });
+exports.mySubmissionsQuerySchema = zod_1.z.object({ eventId: zod_1.z.string().uuid().optional() });
 exports.createSubmissionTypeSchema = zod_1.z.object({
     programId: zod_1.z.string().uuid().nullable().optional(),
     name: zod_1.z.string().min(2).max(120),

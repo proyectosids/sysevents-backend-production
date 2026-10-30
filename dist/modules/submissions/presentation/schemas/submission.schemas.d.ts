@@ -9,6 +9,9 @@ export declare const submissionTypeParamsSchema: z.ZodObject<{
     eventId: z.ZodString;
     typeId: z.ZodString;
 }, z.core.$strip>;
+export declare const mySubmissionsQuerySchema: z.ZodObject<{
+    eventId: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
 export declare const createSubmissionTypeSchema: z.ZodObject<{
     programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     name: z.ZodString;

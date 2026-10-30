@@ -76,7 +76,8 @@ exports.submissionTypesRouter.get('/:eventId/submissions', authenticate_middlewa
     return (0, api_response_1.sendSuccess)(res, 'Event submissions retrieved successfully', submissions);
 }));
 exports.mySubmissionsRouter.get('/submissions', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
-    const submissions = await submissionsRepository.listMine(req.user.id);
+    const { eventId } = submission_schemas_1.mySubmissionsQuerySchema.parse(req.query);
+    const submissions = await submissionsRepository.listMine(req.user.id, eventId ?? null);
     return (0, api_response_1.sendSuccess)(res, 'My submissions retrieved successfully', submissions);
 }));
 exports.submissionsRouter.get('/:id', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
