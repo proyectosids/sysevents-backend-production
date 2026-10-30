@@ -95,6 +95,8 @@ function mapRegistration(row) {
             eventName: row.event_name,
             eventSlug: row.event_slug,
             eventLogoFileId: row.event_logo_file_id ?? null,
+            eventStartsAt: row.event_starts_at ?? null,
+            eventEndsAt: row.event_ends_at ?? null,
             registrationTypeName: row.registration_type_name,
             programName: row.program_name ?? null,
         } : {}),
@@ -935,6 +937,7 @@ class RegistrationsRepository {
            ORDER BY member.role, member.sort_order FOR JSON PATH) AS team_members_json,
           response.form_id, response.answers_json, speaker.id AS speaker_id,
           e.name AS event_name, e.slug AS event_slug, e.logo_file_id AS event_logo_file_id,
+          e.starts_at AS event_starts_at, e.ends_at AS event_ends_at,
           rt.name AS registration_type_name,
           program.name AS program_name
         FROM dbo.event_registrations r

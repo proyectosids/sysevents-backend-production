@@ -32,6 +32,8 @@ export type EventRegistration = {
     eventName?: string;
     eventSlug?: string;
     eventLogoFileId?: string | null;
+    eventStartsAt?: Date | null;
+    eventEndsAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
 };
