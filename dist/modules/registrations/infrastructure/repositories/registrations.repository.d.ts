@@ -249,6 +249,7 @@ export declare class RegistrationsRepository {
         visibility: string;
         registrationTypeId: string | null;
         isActive: boolean;
+        isRequiredForRegistration: boolean;
         sortOrder: number;
         originalName: string;
         mimeType: string;
@@ -269,6 +270,7 @@ export declare class RegistrationsRepository {
         visibility: string;
         registrationTypeId: string | null;
         isActive: boolean;
+        isRequiredForRegistration: boolean;
         sortOrder: number;
         originalName: string;
         mimeType: string;
@@ -284,6 +286,7 @@ export declare class RegistrationsRepository {
         visibility?: 'public' | 'registered' | 'registration_type';
         registrationTypeId?: string | null;
         isActive?: boolean;
+        isRequiredForRegistration?: boolean;
         sortOrder?: number;
         userId?: string;
         targetRoles?: string[];
@@ -298,6 +301,7 @@ export declare class RegistrationsRepository {
         visibility?: 'public' | 'registered' | 'registration_type';
         registrationTypeId?: string | null;
         isActive?: boolean;
+        isRequiredForRegistration?: boolean;
         sortOrder?: number;
         targetRoles?: string[];
     }): Promise<any>;

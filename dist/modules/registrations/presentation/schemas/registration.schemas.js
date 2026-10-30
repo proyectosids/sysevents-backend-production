@@ -152,6 +152,7 @@ exports.createEventMaterialSchema = zod_1.z.object({
     visibility: zod_1.z.enum(['public', 'registered', 'registration_type']).optional(),
     registrationTypeId: zod_1.z.string().uuid().nullable().optional(),
     isActive: zod_1.z.boolean().optional(),
+    isRequiredForRegistration: zod_1.z.boolean().optional(),
     sortOrder: zod_1.z.number().int().min(0).optional(),
     targetRoles: zod_1.z.array(zod_1.z.enum([
         'supervisor', 'leader', 'reviewer', 'evaluator',

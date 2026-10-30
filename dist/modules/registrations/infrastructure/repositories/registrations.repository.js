@@ -1282,6 +1282,7 @@ class RegistrationsRepository {
           p.name AS programName, m.title, m.description, m.material_type AS materialType,
           m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
+          m.is_required_for_registration AS isRequiredForRegistration,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
           f.size_bytes AS sizeBytes,
           (SELECT STRING_AGG(target.role_key, ',') FROM dbo.event_material_role_targets target WHERE target.material_id = m.id) AS targetRolesCsv
@@ -1307,6 +1308,7 @@ class RegistrationsRepository {
           p.name AS programName, m.title, m.description, m.material_type AS materialType,
           m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
+          m.is_required_for_registration AS isRequiredForRegistration,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
           f.size_bytes AS sizeBytes,
           (SELECT STRING_AGG(target.role_key, ',') FROM dbo.event_material_role_targets target WHERE target.material_id = m.id) AS targetRolesCsv
@@ -1422,17 +1424,18 @@ class RegistrationsRepository {
                 .input('visibility', mssql_1.default.NVarChar(40), input.visibility ?? 'public')
                 .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
                 .input('isActive', mssql_1.default.Bit, input.isActive ?? true)
+                .input('isRequiredForRegistration', mssql_1.default.Bit, input.isRequiredForRegistration ?? false)
                 .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? 0)
                 .input('userId', mssql_1.default.UniqueIdentifier, input.userId ?? null)
                 .query(`
         INSERT INTO dbo.event_materials (
-          event_id, file_id, program_id, title, description, material_type, material_type_label, visibility, registration_type_id, is_active, sort_order, created_by
+          event_id, file_id, program_id, title, description, material_type, material_type_label, visibility, registration_type_id, is_active, is_required_for_registration, sort_order, created_by
         )
         OUTPUT INSERTED.id, INSERTED.event_id AS eventId, INSERTED.file_id AS fileId, INSERTED.program_id AS programId,
           INSERTED.title, INSERTED.description, INSERTED.material_type AS materialType, INSERTED.material_type_label AS materialTypeLabel,
           INSERTED.visibility, INSERTED.registration_type_id AS registrationTypeId,
-          INSERTED.is_active AS isActive, INSERTED.sort_order AS sortOrder
-        VALUES (@eventId, @fileId, @programId, @title, @description, @materialType, @materialTypeLabel, @visibility, @registrationTypeId, @isActive, @sortOrder, @userId)
+          INSERTED.is_active AS isActive, INSERTED.is_required_for_registration AS isRequiredForRegistration, INSERTED.sort_order AS sortOrder
+        VALUES (@eventId, @fileId, @programId, @title, @description, @materialType, @materialTypeLabel, @visibility, @registrationTypeId, @isActive, @isRequiredForRegistration, @sortOrder, @userId)
       `);
             const material = result.recordset[0];
             for (const role of Array.from(new Set(input.targetRoles ?? []))) {
@@ -1469,6 +1472,7 @@ class RegistrationsRepository {
                 .input('registrationTypeId', mssql_1.default.UniqueIdentifier, input.registrationTypeId ?? null)
                 .input('updateRegistrationTypeId', mssql_1.default.Bit, Object.prototype.hasOwnProperty.call(input, 'registrationTypeId'))
                 .input('isActive', mssql_1.default.Bit, input.isActive ?? null)
+                .input('isRequiredForRegistration', mssql_1.default.Bit, input.isRequiredForRegistration ?? null)
                 .input('sortOrder', mssql_1.default.Int, input.sortOrder ?? null)
                 .query(`
         UPDATE dbo.event_materials
@@ -1485,6 +1489,7 @@ class RegistrationsRepository {
             visibility = COALESCE(@visibility, visibility),
             registration_type_id = CASE WHEN @updateRegistrationTypeId = 1 THEN @registrationTypeId ELSE registration_type_id END,
             is_active = COALESCE(@isActive, is_active),
+            is_required_for_registration = COALESCE(@isRequiredForRegistration, is_required_for_registration),
             sort_order = COALESCE(@sortOrder, sort_order),
             updated_at = SYSUTCDATETIME()
         WHERE id = @materialId AND event_id = @eventId;
@@ -1493,6 +1498,7 @@ class RegistrationsRepository {
           p.name AS programName, m.title, m.description, m.material_type AS materialType,
           m.material_type_label AS materialTypeLabel,
           m.visibility, m.registration_type_id AS registrationTypeId, m.is_active AS isActive,
+          m.is_required_for_registration AS isRequiredForRegistration,
           m.sort_order AS sortOrder, f.original_name AS originalName, f.mime_type AS mimeType,
           f.size_bytes AS sizeBytes
         FROM dbo.event_materials m

@@ -231,6 +231,7 @@ export declare const createEventMaterialSchema: z.ZodObject<{
     }>>;
     registrationTypeId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     isActive: z.ZodOptional<z.ZodBoolean>;
+    isRequiredForRegistration: z.ZodOptional<z.ZodBoolean>;
     sortOrder: z.ZodOptional<z.ZodNumber>;
     targetRoles: z.ZodOptional<z.ZodArray<z.ZodEnum<{
         supervisor: "supervisor";
@@ -266,6 +267,7 @@ export declare const updateEventMaterialSchema: z.ZodObject<{
     }>>>;
     registrationTypeId: z.ZodOptional<z.ZodOptional<z.ZodNullable<z.ZodString>>>;
     isActive: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
+    isRequiredForRegistration: z.ZodOptional<z.ZodOptional<z.ZodBoolean>>;
     sortOrder: z.ZodOptional<z.ZodOptional<z.ZodNumber>>;
     targetRoles: z.ZodOptional<z.ZodOptional<z.ZodArray<z.ZodEnum<{
         supervisor: "supervisor";
