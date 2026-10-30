@@ -20,6 +20,13 @@ export declare const evaluatorInvitationParamsSchema: z.ZodObject<{
     eventId: z.ZodString;
     invitationId: z.ZodString;
 }, z.core.$strip>;
+export declare const evaluatorScopeParamsSchema: z.ZodObject<{
+    eventId: z.ZodString;
+    userId: z.ZodString;
+}, z.core.$strip>;
+export declare const evaluatorScopeQuerySchema: z.ZodObject<{
+    programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, z.core.$strip>;
 export declare const submitEvaluationSchema: z.ZodObject<{
     answers: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     comments: z.ZodOptional<z.ZodNullable<z.ZodString>>;

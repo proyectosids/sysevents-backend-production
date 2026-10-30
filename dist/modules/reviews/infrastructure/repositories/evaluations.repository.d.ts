@@ -21,6 +21,7 @@ export declare class EvaluationsRepository {
         eventId: string;
         programId: string | null;
     }>;
+    deactivateEvaluatorScope(eventId: string, programId: string | null, userId: string): Promise<boolean>;
     assign(input: {
         submissionId: string;
         evaluatorUserId: string;

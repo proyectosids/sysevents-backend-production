@@ -1,3 +1,4 @@
+import sql from 'mssql';
 import { Tenant, TenantStatus, TenantUser } from '../../domain/entities/tenant';
 export declare class TenantsRepository {
     listTenants(): Promise<Tenant[]>;
@@ -22,6 +23,11 @@ export declare class TenantsRepository {
     } | null>;
     replaceAcademicRoles(tenantId: string, userId: string, academicRoles: string[]): Promise<void>;
     userHasAcademicRole(userId: string, academicRole: string): Promise<boolean>;
+    userHasScopedAcademicRole(userId: string, academicRole: 'supervisor' | 'leader' | 'reviewer' | 'evaluator'): Promise<boolean>;
+    listActiveAcademicResponsibilities(tenantId: string, userId: string): Promise<sql.IRecordSet<{
+        role: string;
+        total: number;
+    }>>;
     listTenantUsers(tenantId: string): Promise<(TenantUser & {
         user: {
             id: string;

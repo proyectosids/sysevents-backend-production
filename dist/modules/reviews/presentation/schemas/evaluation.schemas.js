@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitEvaluationSchema = exports.evaluatorInvitationParamsSchema = exports.evaluationAssignmentParamsSchema = exports.evaluatorAssignmentSchema = exports.acceptEvaluatorInvitationSchema = exports.evaluatorInvitationSchema = void 0;
+exports.submitEvaluationSchema = exports.evaluatorScopeQuerySchema = exports.evaluatorScopeParamsSchema = exports.evaluatorInvitationParamsSchema = exports.evaluationAssignmentParamsSchema = exports.evaluatorAssignmentSchema = exports.acceptEvaluatorInvitationSchema = exports.evaluatorInvitationSchema = void 0;
 const zod_1 = require("zod");
 exports.evaluatorInvitationSchema = zod_1.z.object({
     programId: zod_1.z.string().uuid().nullable().optional(),
@@ -18,6 +18,10 @@ exports.evaluatorAssignmentSchema = zod_1.z.object({
 });
 exports.evaluationAssignmentParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });
 exports.evaluatorInvitationParamsSchema = zod_1.z.object({ eventId: zod_1.z.string().uuid(), invitationId: zod_1.z.string().uuid() });
+exports.evaluatorScopeParamsSchema = zod_1.z.object({ eventId: zod_1.z.string().uuid(), userId: zod_1.z.string().uuid() });
+exports.evaluatorScopeQuerySchema = zod_1.z.object({
+    programId: zod_1.z.string().uuid().nullable().optional(),
+});
 exports.submitEvaluationSchema = zod_1.z.object({
     answers: zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()),
     comments: zod_1.z.string().trim().max(10000).nullable().optional(),

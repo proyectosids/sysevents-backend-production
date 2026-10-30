@@ -33,12 +33,28 @@ function consumesAdminSeat(tenantRole) {
     return tenantRole === 'owner' || tenantRole === 'admin';
 }
 async function syncTenantRoles(userId) {
-    await iamRepository.removeRolesFromUserByNames(userId, ['tenant_owner', 'academic_reviewer']);
+    await iamRepository.removeRolesFromUserByNames(userId, [
+        'tenant_owner',
+        'academic_reviewer',
+        'event_supervisor',
+        'review_team_leader',
+        'event_evaluator',
+        'program_leader',
+    ]);
     if (await tenantsRepository.userHasTenantRole(userId, ['owner', 'admin'])) {
         await iamRepository.assignRoleToUserByName(userId, 'tenant_owner');
     }
-    if (await tenantsRepository.userHasTenantRole(userId, ['reviewer']) || await tenantsRepository.userHasAcademicRole(userId, 'reviewer')) {
-        await iamRepository.assignRoleToUserByName(userId, 'academic_reviewer');
+    const scopedRoles = await Promise.all([
+        tenantsRepository.userHasScopedAcademicRole(userId, 'supervisor'),
+        tenantsRepository.userHasScopedAcademicRole(userId, 'leader'),
+        tenantsRepository.userHasScopedAcademicRole(userId, 'reviewer'),
+        tenantsRepository.userHasScopedAcademicRole(userId, 'evaluator'),
+    ]);
+    const workspaceRoles = ['event_supervisor', 'review_team_leader', 'academic_reviewer', 'event_evaluator'];
+    for (let index = 0; index < scopedRoles.length; index += 1) {
+        if (scopedRoles[index]) {
+            await iamRepository.assignRoleToUserByName(userId, workspaceRoles[index]);
+        }
     }
 }
 async function sendTenantInvitation(input) {
@@ -230,6 +246,10 @@ exports.tenantsRouter.delete('/:id/users/:userId', (0, require_permission_middle
         if (ownersCount <= 1) {
             throw new app_error_1.AppError('The organization must keep at least one owner', 409, 'LAST_TENANT_OWNER');
         }
+    }
+    const activeResponsibilities = await tenantsRepository.listActiveAcademicResponsibilities(id, userId);
+    if (activeResponsibilities.length) {
+        throw new app_error_1.AppError('Reasigna o retira primero las responsabilidades académicas activas de esta persona.', 409, 'TENANT_USER_HAS_ACADEMIC_RESPONSIBILITIES', { responsibilities: activeResponsibilities });
     }
     await tenantsRepository.removeUserFromTenant(id, userId);
     await syncTenantRoles(userId);

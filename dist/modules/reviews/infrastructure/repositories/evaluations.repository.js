@@ -73,9 +73,9 @@ class EvaluationsRepository {
           event_id, program_id, email, user_id, token_hash, expires_at, invited_by
         )
         OUTPUT INSERTED.id, (SELECT name FROM dbo.events WHERE id = @eventId) AS event_name
-        SELECT @eventId, @programId, @email, user.id, @tokenHash, @expiresAt, @invitedBy
+        SELECT @eventId, @programId, @email, invited_user.id, @tokenHash, @expiresAt, @invitedBy
         FROM (SELECT 1 AS marker) source
-        LEFT JOIN dbo.users user ON user.email = @email;
+        LEFT JOIN dbo.users invited_user ON invited_user.email = @email;
       `);
         return result.recordset[0];
     }
@@ -124,6 +124,54 @@ class EvaluationsRepository {
         `);
             await transaction.commit();
             return { eventId: row.event_id, programId: row.program_id };
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
+    async deactivateEvaluatorScope(eventId, programId, userId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const transaction = pool.transaction();
+        await transaction.begin();
+        try {
+            const result = await transaction.request()
+                .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+                .input('programId', mssql_1.default.UniqueIdentifier, programId)
+                .input('userId', mssql_1.default.UniqueIdentifier, userId)
+                .query(`
+          UPDATE dbo.event_program_staff_assignments
+          SET is_active = 0, updated_at = SYSUTCDATETIME()
+          WHERE event_id = @eventId
+            AND ((program_id = @programId) OR (program_id IS NULL AND @programId IS NULL))
+            AND user_id = @userId AND staff_role = 'evaluator' AND is_active = 1;
+
+          UPDATE assignment
+          SET status = 'cancelled', updated_at = SYSUTCDATETIME()
+          FROM dbo.event_evaluator_assignments assignment
+          WHERE assignment.event_id = @eventId
+            AND ((assignment.program_id = @programId) OR (@programId IS NULL))
+            AND assignment.evaluator_user_id = @userId
+            AND assignment.status IN ('pending', 'in_progress');
+        `);
+            if ((result.rowsAffected[0] ?? 0) === 0) {
+                await transaction.rollback();
+                return false;
+            }
+            await transaction.request()
+                .input('userId', mssql_1.default.UniqueIdentifier, userId)
+                .query(`
+          DELETE user_role
+          FROM dbo.user_roles user_role
+          INNER JOIN dbo.roles role ON role.id = user_role.role_id AND role.name = 'event_evaluator'
+          WHERE user_role.user_id = @userId
+            AND NOT EXISTS (
+              SELECT 1 FROM dbo.event_program_staff_assignments assignment
+              WHERE assignment.user_id = @userId AND assignment.staff_role = 'evaluator' AND assignment.is_active = 1
+            );
+        `);
+            await transaction.commit();
+            return true;
         }
         catch (error) {
             await transaction.rollback();
@@ -199,7 +247,7 @@ class EvaluationsRepository {
         LEFT JOIN dbo.event_evaluation_forms form ON form.id = assignment.evaluation_form_id AND form.status = 'active'
         LEFT JOIN dbo.event_assessment_format_versions dynamic_version ON dynamic_version.id = assignment.assessment_format_version_id AND dynamic_version.status IN ('published','archived')
         WHERE assignment.id = @assignmentId AND assignment.evaluator_user_id = @userId
-          AND form.printable_template_file_id IS NOT NULL
+          AND COALESCE(dynamic_version.printable_template_file_id, form.printable_template_file_id) IS NOT NULL
       `);
         return result.recordset[0]?.file_id ?? null;
     }

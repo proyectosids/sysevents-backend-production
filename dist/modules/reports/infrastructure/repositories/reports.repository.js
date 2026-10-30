@@ -68,8 +68,8 @@ class ReportsRepository {
         const result = await request.query(`
       SELECT program.id, program.name
       FROM dbo.event_programs program
-      ${canViewAllPrograms ? '' : `INNER JOIN dbo.event_program_review_team_members member
-        ON member.program_id = program.id AND member.user_id = @userId AND member.team_role = 'leader'`}
+      ${canViewAllPrograms ? '' : `INNER JOIN dbo.event_review_teams team
+        ON team.program_id = program.id AND team.leader_user_id = @userId AND team.is_active = 1`}
       WHERE program.event_id = @eventId AND program.deleted_at IS NULL
       ORDER BY program.sort_order, program.name
     `);
@@ -95,7 +95,8 @@ class ReportsRepository {
         (
           SELECT COUNT(1) FROM dbo.review_assignments assignment
           INNER JOIN dbo.submissions submission ON submission.id = assignment.submission_id
-          WHERE submission.event_id = @eventId ${submissionScope} AND assignment.status <> 'submitted'
+          WHERE submission.event_id = @eventId ${submissionScope}
+            AND assignment.status IN ('assigned', 'returned_to_reviewer', 'submitted_to_leader')
         ) AS pendingReviews
     `);
         return result.recordset[0];

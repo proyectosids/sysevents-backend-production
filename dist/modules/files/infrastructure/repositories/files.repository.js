@@ -235,13 +235,14 @@ class FilesRepository {
                     SELECT 1 FROM dbo.event_registration_team_members team_member
                     INNER JOIN dbo.event_registrations registration ON registration.id = team_member.registration_id
                     INNER JOIN dbo.users requesting_user ON requesting_user.id = @userId AND requesting_user.email = team_member.email
-                    WHERE registration.event_id = m.event_id AND team_member.role = target.role_key
+                    WHERE registration.event_id = m.event_id AND registration.status <> 'cancelled' AND team_member.role = target.role_key
                       AND (m.program_id IS NULL OR registration.program_id = m.program_id)
                   ))
                   OR (target.role_key = 'keynote_speaker' AND EXISTS (
                     SELECT 1 FROM dbo.event_speakers speaker
                     INNER JOIN dbo.users requesting_user ON requesting_user.id = @userId AND requesting_user.email = speaker.email
                     WHERE speaker.event_id = m.event_id AND speaker.status = 'published'
+                      AND speaker.source_registration_id IS NULL AND m.program_id IS NULL
                   ))
                 )
             )

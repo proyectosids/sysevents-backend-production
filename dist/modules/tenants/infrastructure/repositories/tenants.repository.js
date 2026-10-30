@@ -198,6 +198,65 @@ class TenantsRepository {
       `);
         return (result.recordset[0]?.total ?? 0) > 0;
     }
+    async userHasScopedAcademicRole(userId, academicRole) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .input('academicRole', mssql_1.default.NVarChar(30), academicRole)
+            .query(`
+        SELECT COUNT(1) AS total
+        FROM (
+          SELECT assignment.id
+          FROM dbo.event_program_staff_assignments assignment
+          WHERE assignment.user_id = @userId
+            AND assignment.staff_role = @academicRole
+            AND assignment.is_active = 1
+          UNION ALL
+          SELECT team.id
+          FROM dbo.event_review_teams team
+          WHERE @academicRole = 'leader'
+            AND team.leader_user_id = @userId
+            AND team.is_active = 1
+          UNION ALL
+          SELECT member.id
+          FROM dbo.event_review_team_members member
+          INNER JOIN dbo.event_review_teams team ON team.id = member.team_id AND team.is_active = 1
+          WHERE @academicRole = 'reviewer'
+            AND member.user_id = @userId
+            AND member.is_active = 1
+        ) scoped_role
+      `);
+        return (result.recordset[0]?.total ?? 0) > 0;
+    }
+    async listActiveAcademicResponsibilities(tenantId, userId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('tenantId', mssql_1.default.UniqueIdentifier, tenantId)
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .query(`
+        SELECT responsibility.role, COUNT(1) AS total
+        FROM (
+          SELECT assignment.staff_role AS role
+          FROM dbo.event_program_staff_assignments assignment
+          INNER JOIN dbo.events event ON event.id = assignment.event_id
+          WHERE event.tenant_id = @tenantId AND assignment.user_id = @userId AND assignment.is_active = 1
+          UNION ALL
+          SELECT 'leader'
+          FROM dbo.event_review_teams team
+          INNER JOIN dbo.events event ON event.id = team.event_id
+          WHERE event.tenant_id = @tenantId AND team.leader_user_id = @userId AND team.is_active = 1
+          UNION ALL
+          SELECT 'reviewer'
+          FROM dbo.event_review_team_members member
+          INNER JOIN dbo.event_review_teams team ON team.id = member.team_id AND team.is_active = 1
+          INNER JOIN dbo.events event ON event.id = team.event_id
+          WHERE event.tenant_id = @tenantId AND member.user_id = @userId AND member.is_active = 1
+        ) responsibility
+        GROUP BY responsibility.role
+        ORDER BY responsibility.role
+      `);
+        return result.recordset;
+    }
     async listTenantUsers(tenantId) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool

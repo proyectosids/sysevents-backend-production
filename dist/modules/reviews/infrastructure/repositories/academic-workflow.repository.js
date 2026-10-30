@@ -44,7 +44,7 @@ class AcademicWorkflowRepository {
       `);
         return result.recordset;
     }
-    async getEventContext(eventId, userId, includeMembers) {
+    async getEventContext(eventId, userId, includeMembers, unrestrictedPrograms = false) {
         const pool = await (0, database_1.getSqlPool)();
         const event = await pool.request()
             .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
@@ -56,7 +56,7 @@ class AcademicWorkflowRepository {
         const programs = await pool.request()
             .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
             .input('userId', mssql_1.default.UniqueIdentifier, userId)
-            .input('unrestricted', mssql_1.default.Bit, includeMembers)
+            .input('unrestricted', mssql_1.default.Bit, unrestrictedPrograms)
             .query(`
         SELECT program.id, program.name
         FROM dbo.event_programs program
@@ -307,6 +307,20 @@ class AcademicWorkflowRepository {
         const transaction = pool.transaction();
         await transaction.begin();
         try {
+            const previousAssignments = input.teamId
+                ? await transaction.request()
+                    .input('teamId', mssql_1.default.UniqueIdentifier, input.teamId)
+                    .query(`
+            SELECT leader_user_id AS userId
+            FROM dbo.event_review_teams
+            WHERE id = @teamId AND is_active = 1
+            UNION
+            SELECT member.user_id
+            FROM dbo.event_review_team_members member
+            INNER JOIN dbo.event_review_teams team ON team.id = member.team_id AND team.is_active = 1
+            WHERE member.team_id = @teamId AND member.is_active = 1
+          `)
+                : { recordset: [] };
             const membership = await transaction.request()
                 .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
                 .input('programId', mssql_1.default.UniqueIdentifier, input.programId)
@@ -404,9 +418,12 @@ class AcademicWorkflowRepository {
               INSERT INTO dbo.event_review_team_members (team_id, user_id, assigned_by)
               VALUES (@teamId, @userId, @changedBy);
           `);
-                await this.assignWorkspaceRole(transaction, reviewerUserId, 'academic_reviewer');
             }
-            await this.assignWorkspaceRole(transaction, input.leaderUserId, 'review_team_leader');
+            await this.syncWorkspaceRoles(transaction, Array.from(new Set([
+                ...previousAssignments.recordset.map((assignment) => assignment.userId),
+                input.leaderUserId,
+                ...reviewerIds,
+            ])));
             await transaction.commit();
             return teamId;
         }
@@ -453,6 +470,27 @@ class AcademicWorkflowRepository {
                     throw new app_error_1.AppError('La persona seleccionada no tiene habilitado el perfil Supervisor. Activa la excepción para este programa si deseas utilizarla.', 409, 'SUPERVISOR_PROFILE_REQUIRED');
                 }
             }
+            const previousSupervisors = await transaction.request()
+                .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
+                .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
+                .query(`
+          SELECT user_id AS userId
+          FROM dbo.event_program_staff_assignments
+          WHERE event_id = @eventId
+            AND ((program_id = @programId) OR (program_id IS NULL AND @programId IS NULL))
+            AND staff_role = 'supervisor' AND is_active = 1
+        `);
+            await transaction.request()
+                .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
+                .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
+                .input('userId', mssql_1.default.UniqueIdentifier, input.userId)
+                .query(`
+          UPDATE dbo.event_program_staff_assignments
+          SET is_active = 0, updated_at = SYSUTCDATETIME()
+          WHERE event_id = @eventId
+            AND ((program_id = @programId) OR (program_id IS NULL AND @programId IS NULL))
+            AND staff_role = 'supervisor' AND is_active = 1 AND user_id <> @userId
+        `);
             await transaction.request()
                 .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
                 .input('programId', mssql_1.default.UniqueIdentifier, input.programId ?? null)
@@ -472,7 +510,10 @@ class AcademicWorkflowRepository {
             INSERT INTO dbo.event_program_staff_assignments (event_id, program_id, user_id, staff_role, assigned_by)
             VALUES (@eventId, @programId, @userId, 'supervisor', @assignedBy);
         `);
-            await this.assignWorkspaceRole(transaction, input.userId, 'event_supervisor');
+            await this.syncWorkspaceRoles(transaction, Array.from(new Set([
+                ...previousSupervisors.recordset.map((assignment) => assignment.userId),
+                input.userId,
+            ])));
             await transaction.commit();
         }
         catch (error) {
@@ -602,16 +643,64 @@ class AcademicWorkflowRepository {
       `);
         return result.recordset[0] ?? null;
     }
-    async assignWorkspaceRole(transaction, userId, roleName) {
-        await transaction.request()
-            .input('userId', mssql_1.default.UniqueIdentifier, userId)
-            .input('roleName', mssql_1.default.NVarChar(80), roleName)
-            .query(`
-        INSERT INTO dbo.user_roles (user_id, role_id)
-        SELECT @userId, role.id FROM dbo.roles role
-        WHERE role.name = @roleName
-          AND NOT EXISTS (SELECT 1 FROM dbo.user_roles existing WHERE existing.user_id = @userId AND existing.role_id = role.id)
-      `);
+    async syncWorkspaceRoles(transaction, userIds) {
+        for (const userId of Array.from(new Set(userIds))) {
+            await transaction.request()
+                .input('userId', mssql_1.default.UniqueIdentifier, userId)
+                .query(`
+          DELETE user_role
+          FROM dbo.user_roles user_role
+          INNER JOIN dbo.roles role ON role.id = user_role.role_id
+          WHERE user_role.user_id = @userId
+            AND role.name IN ('event_supervisor', 'review_team_leader', 'academic_reviewer', 'event_evaluator')
+            AND NOT (
+              (role.name = 'event_supervisor' AND EXISTS (
+                SELECT 1 FROM dbo.event_program_staff_assignments assignment
+                WHERE assignment.user_id = @userId AND assignment.staff_role = 'supervisor' AND assignment.is_active = 1
+              ))
+              OR (role.name = 'event_evaluator' AND EXISTS (
+                SELECT 1 FROM dbo.event_program_staff_assignments assignment
+                WHERE assignment.user_id = @userId AND assignment.staff_role = 'evaluator' AND assignment.is_active = 1
+              ))
+              OR (role.name = 'review_team_leader' AND EXISTS (
+                SELECT 1 FROM dbo.event_review_teams team
+                WHERE team.leader_user_id = @userId AND team.is_active = 1
+              ))
+              OR (role.name = 'academic_reviewer' AND EXISTS (
+                SELECT 1 FROM dbo.event_review_team_members member
+                INNER JOIN dbo.event_review_teams team ON team.id = member.team_id AND team.is_active = 1
+                WHERE member.user_id = @userId AND member.is_active = 1
+              ))
+            );
+
+          INSERT INTO dbo.user_roles (user_id, role_id)
+          SELECT @userId, role.id
+          FROM dbo.roles role
+          WHERE (
+            (role.name = 'event_supervisor' AND EXISTS (
+              SELECT 1 FROM dbo.event_program_staff_assignments assignment
+              WHERE assignment.user_id = @userId AND assignment.staff_role = 'supervisor' AND assignment.is_active = 1
+            ))
+            OR (role.name = 'event_evaluator' AND EXISTS (
+              SELECT 1 FROM dbo.event_program_staff_assignments assignment
+              WHERE assignment.user_id = @userId AND assignment.staff_role = 'evaluator' AND assignment.is_active = 1
+            ))
+            OR (role.name = 'review_team_leader' AND EXISTS (
+              SELECT 1 FROM dbo.event_review_teams team
+              WHERE team.leader_user_id = @userId AND team.is_active = 1
+            ))
+            OR (role.name = 'academic_reviewer' AND EXISTS (
+              SELECT 1 FROM dbo.event_review_team_members member
+              INNER JOIN dbo.event_review_teams team ON team.id = member.team_id AND team.is_active = 1
+              WHERE member.user_id = @userId AND member.is_active = 1
+            ))
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.user_roles existing
+            WHERE existing.user_id = @userId AND existing.role_id = role.id
+          );
+        `);
+        }
     }
 }
 exports.AcademicWorkflowRepository = AcademicWorkflowRepository;

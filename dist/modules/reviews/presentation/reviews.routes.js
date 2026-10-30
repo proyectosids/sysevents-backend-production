@@ -46,7 +46,7 @@ exports.reviewsRouter.get('/events/:eventId/academic-context', authenticate_midd
     }
     const canManageTeams = req.user.permissions.includes('submissions.manage')
         || (await academicWorkflowRepository.listMyScopes(req.user.id)).some((scope) => scope.eventId === eventId && scope.role === 'supervisor');
-    const context = await academicWorkflowRepository.getEventContext(eventId, req.user.id, canManageTeams);
+    const context = await academicWorkflowRepository.getEventContext(eventId, req.user.id, canManageTeams, unrestricted);
     if (!context)
         throw new app_error_1.AppError('Event not found', 404, 'EVENT_NOT_FOUND');
     return (0, api_response_1.sendSuccess)(res, 'Academic event context retrieved successfully', context);

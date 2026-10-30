@@ -103,6 +103,20 @@ exports.evaluationsRouter.post('/events/:eventId/evaluator-assignments', authent
     const assignment = await evaluationsRepository.assign({ ...input, assignedBy: req.user.id });
     return (0, api_response_1.sendSuccess)(res, 'Evaluator assignment created successfully', assignment, 201);
 }));
+exports.evaluationsRouter.delete('/events/:eventId/evaluators/:userId', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId, userId } = evaluation_schemas_1.evaluatorScopeParamsSchema.parse(req.params);
+    const { programId = null } = evaluation_schemas_1.evaluatorScopeQuerySchema.parse({
+        programId: typeof req.query.programId === 'string' && req.query.programId ? req.query.programId : null,
+    });
+    const canRemove = req.user.permissions.includes('submissions.manage')
+        || await academicWorkflowRepository.isSupervisor(eventId, programId, req.user.id);
+    if (!canRemove)
+        throw new app_error_1.AppError('Sólo el supervisor del alcance puede retirar evaluadores.', 403, 'SUPERVISOR_REQUIRED');
+    if (!await evaluationsRepository.deactivateEvaluatorScope(eventId, programId, userId)) {
+        throw new app_error_1.AppError('El evaluador no tiene un alcance activo con esos datos.', 404, 'EVALUATOR_SCOPE_NOT_FOUND');
+    }
+    return (0, api_response_1.sendSuccess)(res, 'Evaluator scope removed successfully');
+}));
 exports.myEvaluationsRouter.get('/evaluations', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     return (0, api_response_1.sendSuccess)(res, 'My evaluations retrieved successfully', await evaluationsRepository.listMine(req.user.id));
 }));

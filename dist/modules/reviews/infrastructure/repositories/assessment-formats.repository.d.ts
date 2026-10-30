@@ -1,6 +1,10 @@
 import sql from 'mssql';
 import { AssessmentDefinition } from '../../domain/assessment-engine';
 export declare class AssessmentFormatsRepository {
+    scopes(eventId: string, formatId: string): Promise<sql.IRecordSet<{
+        programId: string | null;
+        submissionTypeId: string | null;
+    }>>;
     list(eventId: string): Promise<any[]>;
     versions(eventId: string, formatId: string): Promise<any[]>;
     create(input: {

@@ -17,6 +17,19 @@ const parse = (value, fallback) => {
     }
 };
 class AssessmentFormatsRepository {
+    async scopes(eventId, formatId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .input('formatId', mssql_1.default.UniqueIdentifier, formatId)
+            .query(`
+        SELECT scope.program_id AS programId, scope.submission_type_id AS submissionTypeId
+        FROM dbo.event_assessment_format_scopes scope
+        INNER JOIN dbo.event_assessment_formats format ON format.id = scope.format_id
+        WHERE format.event_id = @eventId AND format.id = @formatId
+      `);
+        return result.recordset;
+    }
     async list(eventId) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool.request().input('eventId', mssql_1.default.UniqueIdentifier, eventId).query(`

@@ -2,7 +2,7 @@ import sql from 'mssql';
 export type AcademicScopeRole = 'supervisor' | 'leader' | 'reviewer' | 'evaluator';
 export declare class AcademicWorkflowRepository {
     listMyScopes(userId: string): Promise<sql.IRecordSet<any>>;
-    getEventContext(eventId: string, userId: string, includeMembers: boolean): Promise<{
+    getEventContext(eventId: string, userId: string, includeMembers: boolean, unrestrictedPrograms?: boolean): Promise<{
         event: {
             id: string;
             name: string;
@@ -77,5 +77,5 @@ export declare class AcademicWorkflowRepository {
         leaderUserId: string | null;
         leaderEmail: string | null;
     }>;
-    private assignWorkspaceRole;
+    private syncWorkspaceRoles;
 }

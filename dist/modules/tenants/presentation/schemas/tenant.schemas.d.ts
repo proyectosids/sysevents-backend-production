@@ -24,9 +24,9 @@ export declare const addTenantUserSchema: z.ZodObject<{
     firstName: z.ZodOptional<z.ZodString>;
     lastName: z.ZodOptional<z.ZodString>;
     tenantRole: z.ZodDefault<z.ZodEnum<{
+        reviewer: "reviewer";
         owner: "owner";
         admin: "admin";
-        reviewer: "reviewer";
         member: "member";
     }>>;
     academicRoles: z.ZodDefault<z.ZodArray<z.ZodEnum<{
@@ -42,9 +42,9 @@ export declare const tenantUserParamsSchema: z.ZodObject<{
 }, z.core.$strip>;
 export declare const updateTenantUserSchema: z.ZodObject<{
     tenantRole: z.ZodEnum<{
+        reviewer: "reviewer";
         owner: "owner";
         admin: "admin";
-        reviewer: "reviewer";
         member: "member";
     }>;
     academicRoles: z.ZodOptional<z.ZodArray<z.ZodEnum<{
