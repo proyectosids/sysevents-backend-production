@@ -9,7 +9,10 @@ const database_1 = require("../../../../config/database");
 const app_error_1 = require("../../../../shared/errors/app-error");
 const parseJson = (value, fallback) => {
     try {
-        return value ? JSON.parse(value) : fallback;
+        if (!value)
+            return fallback;
+        const parsed = JSON.parse(value);
+        return (typeof parsed === 'string' ? JSON.parse(parsed) : parsed);
     }
     catch {
         return fallback;
@@ -557,6 +560,11 @@ class ReviewsRepository {
         WHERE response.review_assignment_id = @assignmentId AND history.action = 'submitted'
         ORDER BY history.created_at DESC
       `);
+        const submittedAssessmentHistory = assessmentHistory.recordset.map(({ snapshotJson, ...item }) => ({
+            ...item,
+            snapshot: parseJson(snapshotJson, {}),
+        }));
+        const latestSubmittedSnapshot = submittedAssessmentHistory[0]?.snapshot;
         const row = assignment.recordset[0];
         const assessment = row.assessmentVersionId && row.assessmentDefinitionJson ? {
             id: row.id,
@@ -567,11 +575,11 @@ class ReviewsRepository {
             instructions: row.assessmentInstructions,
             definition: parseJson(row.assessmentDefinitionJson, null),
             printableTemplateFileId: row.assessmentTemplateFileId,
-            answers: parseJson(row.assessmentAnswersJson, {}),
-            calculated: parseJson(row.assessmentCalculatedJson, {}),
-            recommendation: row.assessmentRecommendation,
-            proposedDecision: row.assessmentProposedDecision,
-            comments: row.assessmentComments,
+            answers: latestSubmittedSnapshot?.answers ?? parseJson(row.assessmentAnswersJson, {}),
+            calculated: latestSubmittedSnapshot?.calculated ?? parseJson(row.assessmentCalculatedJson, {}),
+            recommendation: latestSubmittedSnapshot?.recommendation ?? row.assessmentRecommendation,
+            proposedDecision: latestSubmittedSnapshot?.proposedDecision ?? row.assessmentProposedDecision,
+            comments: latestSubmittedSnapshot?.comments ?? row.assessmentComments,
             responseStatus: row.assessmentResponseStatus,
             context: {
                 eventName: row.assessmentEventName ?? null,
@@ -588,10 +596,7 @@ class ReviewsRepository {
             files: files.recordset,
             comments: comments.recordset,
             assessment,
-            assessmentHistory: assessmentHistory.recordset.map(({ snapshotJson, ...item }) => ({
-                ...item,
-                snapshot: parseJson(snapshotJson, {}),
-            })),
+            assessmentHistory: submittedAssessmentHistory,
         };
     }
     async addFileComment(input) {
