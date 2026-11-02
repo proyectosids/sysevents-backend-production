@@ -15,6 +15,7 @@ const require_permission_middleware_1 = require("../../iam/presentation/middlewa
 const submissions_repository_1 = require("../../submissions/infrastructure/repositories/submissions.repository");
 const reviews_repository_1 = require("../infrastructure/repositories/reviews.repository");
 const academic_workflow_repository_1 = require("../infrastructure/repositories/academic-workflow.repository");
+const assessment_formats_repository_1 = require("../infrastructure/repositories/assessment-formats.repository");
 const review_schemas_1 = require("./schemas/review.schemas");
 exports.reviewsRouter = (0, express_1.Router)();
 exports.myReviewsRouter = (0, express_1.Router)();
@@ -26,6 +27,7 @@ const fileStorageService = new file_storage_service_1.FileStorageService();
 const iamRepository = new iam_repository_1.IamRepository();
 const academicWorkflowRepository = new academic_workflow_repository_1.AcademicWorkflowRepository();
 const communicationsRepository = new communications_repository_1.CommunicationsRepository();
+const assessmentFormatsRepository = new assessment_formats_repository_1.AssessmentFormatsRepository();
 exports.myReviewsRouter.get('/academic-scopes', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     return (0, api_response_1.sendSuccess)(res, 'Academic scopes retrieved successfully', await academicWorkflowRepository.listMyScopes(req.user.id));
 }));
@@ -108,6 +110,10 @@ exports.reviewsRouter.post('/submissions/:id/assign-reviewer', authenticate_midd
     const submission = await submissionsRepository.findById(id);
     if (!submission)
         throw new app_error_1.AppError('Submission not found', 404, 'SUBMISSION_NOT_FOUND');
+    const eligibleFormats = await assessmentFormatsRepository.eligibleVersions(submission.eventId, 'review', submission.programId, submission.submissionTypeId);
+    if (!eligibleFormats.some((format) => format.versionId === input.assessmentFormatVersionId)) {
+        throw new app_error_1.AppError('El formato de dictaminación no corresponde al programa y tipo de este trabajo.', 409, 'ASSESSMENT_FORMAT_SCOPE_MISMATCH');
+    }
     if (!await academicWorkflowRepository.isTeamReviewerForSubmission(id, input.teamId, input.reviewerUserId)) {
         throw new app_error_1.AppError('El equipo o el Revisor no corresponden al programa de este trabajo.', 409, 'REVIEWER_SCOPE_MISMATCH');
     }

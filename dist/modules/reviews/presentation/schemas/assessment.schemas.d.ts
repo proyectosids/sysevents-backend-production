@@ -1,6 +1,7 @@
 import { z } from 'zod';
 export declare const assessmentDefinitionSchema: z.ZodObject<{
     schemaVersion: z.ZodLiteral<1>;
+    scoreCalculationId: z.ZodOptional<z.ZodString>;
     header: z.ZodOptional<z.ZodObject<{
         enabled: z.ZodBoolean;
         title: z.ZodOptional<z.ZodString>;
@@ -130,6 +131,7 @@ export declare const createAssessmentFormatSchema: z.ZodObject<{
     }, z.core.$strip>>>;
     definition: z.ZodObject<{
         schemaVersion: z.ZodLiteral<1>;
+        scoreCalculationId: z.ZodOptional<z.ZodString>;
         header: z.ZodOptional<z.ZodObject<{
             enabled: z.ZodBoolean;
             title: z.ZodOptional<z.ZodString>;
@@ -239,6 +241,7 @@ export declare const updateAssessmentFormatSchema: z.ZodObject<{
     }, z.core.$strip>>>>;
     definition: z.ZodOptional<z.ZodObject<{
         schemaVersion: z.ZodLiteral<1>;
+        scoreCalculationId: z.ZodOptional<z.ZodString>;
         header: z.ZodOptional<z.ZodObject<{
             enabled: z.ZodBoolean;
             title: z.ZodOptional<z.ZodString>;
@@ -340,6 +343,7 @@ export declare const updateAssessmentFormatSchema: z.ZodObject<{
 export declare const assessmentPreviewSchema: z.ZodObject<{
     definition: z.ZodObject<{
         schemaVersion: z.ZodLiteral<1>;
+        scoreCalculationId: z.ZodOptional<z.ZodString>;
         header: z.ZodOptional<z.ZodObject<{
             enabled: z.ZodBoolean;
             title: z.ZodOptional<z.ZodString>;

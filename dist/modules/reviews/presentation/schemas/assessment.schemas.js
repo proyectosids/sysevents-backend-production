@@ -28,6 +28,7 @@ const fieldSchema = zod_1.z.object({
 });
 exports.assessmentDefinitionSchema = zod_1.z.object({
     schemaVersion: zod_1.z.literal(1),
+    scoreCalculationId: id.optional(),
     header: zod_1.z.object({
         enabled: zod_1.z.boolean(),
         title: zod_1.z.string().max(180).optional(),

@@ -143,7 +143,7 @@ class AssessmentFormatsRepository {
         await transaction.begin();
         try {
             const row = await transaction.request().input('eventId', mssql_1.default.UniqueIdentifier, eventId).input('formatId', mssql_1.default.UniqueIdentifier, formatId).input('versionId', mssql_1.default.UniqueIdentifier, versionId).query(`
-        SELECT TOP 1 version.definition_json FROM dbo.event_assessment_format_versions version
+        SELECT TOP 1 version.definition_json, format.purpose FROM dbo.event_assessment_format_versions version
         INNER JOIN dbo.event_assessment_formats format ON format.id=version.format_id
         WHERE format.event_id=@eventId AND format.id=@formatId AND version.id=@versionId AND version.status='draft'
       `);
@@ -153,6 +153,9 @@ class AssessmentFormatsRepository {
             const errors = (0, assessment_engine_1.validateAssessmentDefinition)(definition);
             if (errors.length)
                 throw new app_error_1.AppError('El formato contiene errores y no puede publicarse.', 422, 'ASSESSMENT_FORMAT_INVALID', { errors });
+            if (row.recordset[0].purpose === 'review' && !definition.scoreCalculationId) {
+                throw new app_error_1.AppError('Selecciona el cálculo que representa la calificación final antes de publicar el dictamen.', 422, 'ASSESSMENT_FINAL_SCORE_REQUIRED');
+            }
             await transaction.request().input('formatId', mssql_1.default.UniqueIdentifier, formatId).input('versionId', mssql_1.default.UniqueIdentifier, versionId).input('userId', mssql_1.default.UniqueIdentifier, userId).query(`
         UPDATE dbo.event_assessment_format_versions SET status='archived', updated_at=SYSUTCDATETIME() WHERE format_id=@formatId AND status='published';
         UPDATE dbo.event_assessment_format_versions SET status='published', published_by=@userId, published_at=SYSUTCDATETIME(), updated_at=SYSUTCDATETIME() WHERE id=@versionId;
@@ -217,13 +220,20 @@ class AssessmentFormatsRepository {
     async eligibleVersions(eventId, purpose, programId, submissionTypeId) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool.request().input('eventId', mssql_1.default.UniqueIdentifier, eventId).input('purpose', mssql_1.default.NVarChar(30), purpose).input('programId', mssql_1.default.UniqueIdentifier, programId ?? null).input('submissionTypeId', mssql_1.default.UniqueIdentifier, submissionTypeId ?? null).query(`
-      SELECT DISTINCT format.id AS formatId,format.name,version.id AS versionId,version.version_number AS versionNumber
+      SELECT format.id AS formatId,format.name,version.id AS versionId,version.version_number AS versionNumber,
+        MAX(CASE
+          WHEN scope.program_id=@programId AND scope.submission_type_id=@submissionTypeId THEN 4
+          WHEN scope.program_id=@programId AND scope.submission_type_id IS NULL THEN 3
+          WHEN scope.program_id IS NULL AND scope.submission_type_id=@submissionTypeId THEN 2
+          ELSE 1 END) AS matchSpecificity
       FROM dbo.event_assessment_formats format INNER JOIN dbo.event_assessment_format_versions version ON version.format_id=format.id AND version.status='published'
       INNER JOIN dbo.event_assessment_format_scopes scope ON scope.format_id=format.id
       WHERE format.event_id=@eventId AND format.purpose=@purpose AND format.status='published'
         AND (scope.program_id IS NULL OR scope.program_id=@programId)
         AND (scope.submission_type_id IS NULL OR scope.submission_type_id=@submissionTypeId)
-      ORDER BY format.name
+        AND (@purpose <> 'review' OR JSON_VALUE(version.definition_json, '$.scoreCalculationId') IS NOT NULL)
+      GROUP BY format.id,format.name,version.id,version.version_number
+      ORDER BY matchSpecificity DESC,format.name
     `);
         return result.recordset;
     }
@@ -306,11 +316,11 @@ class AssessmentFormatsRepository {
         UPDATE dbo.event_evaluator_assignments SET status='submitted',updated_at=SYSUTCDATETIME() WHERE id=@assignmentId;
       `);
             if (input.kind === 'review' && input.submit) {
-                const firstScore = Object.values(evaluation.calculated)[0];
+                const finalScore = (0, assessment_engine_1.assessmentFinalScore)(workspace.definition, evaluation);
                 const transition = await transaction.request().input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
                     .input('recommendation', mssql_1.default.NVarChar(40), evaluation.recommendation ?? input.proposedDecision ?? 'changes_requested')
                     .input('comments', mssql_1.default.NVarChar(mssql_1.default.MAX), input.comments ?? null)
-                    .input('score', mssql_1.default.Decimal(8, 2), typeof firstScore === 'number' ? firstScore : null)
+                    .input('score', mssql_1.default.Decimal(8, 2), typeof finalScore === 'number' ? finalScore : null)
                     .input('userId', mssql_1.default.UniqueIdentifier, input.userId).query(`
             DECLARE @previous NVARCHAR(40)=(SELECT status FROM dbo.review_assignments WHERE id=@assignmentId AND reviewer_user_id=@userId);
             IF @previous NOT IN ('assigned','returned_to_reviewer') THROW 51000, 'REVIEW_NOT_SUBMITTABLE', 1;

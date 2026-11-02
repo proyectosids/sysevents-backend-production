@@ -7,6 +7,14 @@ exports.ReviewsRepository = void 0;
 const mssql_1 = __importDefault(require("mssql"));
 const database_1 = require("../../../../config/database");
 const app_error_1 = require("../../../../shared/errors/app-error");
+const parseJson = (value, fallback) => {
+    try {
+        return value ? JSON.parse(value) : fallback;
+    }
+    catch {
+        return fallback;
+    }
+};
 class ReviewsRepository {
     async listProgramReviewTeams(eventId) {
         const pool = await (0, database_1.getSqlPool)();
@@ -467,10 +475,41 @@ class ReviewsRepository {
           submission.title, submission.abstract, submission.keywords,
           users.id AS reviewerUserId, users.first_name AS reviewerFirstName,
           users.last_name AS reviewerLastName, users.email AS reviewerEmail,
-          result.recommendation, result.comments AS reviewComments, result.score
+          result.recommendation, result.comments AS reviewComments, result.score,
+          assessment_version.id AS assessmentVersionId,
+          assessment_version.version_number AS assessmentVersionNumber,
+          assessment_version.definition_json AS assessmentDefinitionJson,
+          assessment_version.printable_template_file_id AS assessmentTemplateFileId,
+          assessment_format.name AS assessmentFormatName,
+          assessment_format.instructions AS assessmentInstructions,
+          assessment_response.answers_json AS assessmentAnswersJson,
+          assessment_response.calculated_json AS assessmentCalculatedJson,
+          assessment_response.recommendation AS assessmentRecommendation,
+          assessment_response.proposed_decision AS assessmentProposedDecision,
+          assessment_response.comments AS assessmentComments,
+          assessment_response.status AS assessmentResponseStatus,
+          event.name AS assessmentEventName,
+          event.logo_file_id AS assessmentEventLogoFileId,
+          submission_type.name AS assessmentSubmissionType,
+          knowledge_area.name AS assessmentKnowledgeArea,
+          knowledge_line.name AS assessmentKnowledgeLine,
+          registration_response.answers_json AS assessmentRegistrationAnswersJson
         FROM dbo.review_assignments assignment
         INNER JOIN dbo.submissions submission ON submission.id = assignment.submission_id
+        INNER JOIN dbo.events event ON event.id = submission.event_id
+        LEFT JOIN dbo.submission_types submission_type ON submission_type.id = submission.submission_type_id
+        LEFT JOIN dbo.event_knowledge_areas knowledge_area ON knowledge_area.id = submission.knowledge_area_id
+        LEFT JOIN dbo.event_knowledge_lines knowledge_line ON knowledge_line.id = submission.knowledge_line_id
         INNER JOIN dbo.users users ON users.id = assignment.reviewer_user_id
+        LEFT JOIN dbo.event_assessment_format_versions assessment_version ON assessment_version.id = assignment.assessment_format_version_id
+        LEFT JOIN dbo.event_assessment_formats assessment_format ON assessment_format.id = assessment_version.format_id
+        LEFT JOIN dbo.assessment_responses assessment_response ON assessment_response.review_assignment_id = assignment.id
+        OUTER APPLY (
+          SELECT TOP 1 form_response.answers_json
+          FROM dbo.event_registration_form_responses form_response
+          WHERE form_response.registration_id = submission.registration_id
+          ORDER BY form_response.submitted_at DESC
+        ) registration_response
         OUTER APPLY (
           SELECT TOP 1 recommendation, comments, score FROM dbo.review_results
           WHERE assignment_id = assignment.id ORDER BY created_at DESC
@@ -506,7 +545,33 @@ class ReviewsRepository {
         WHERE file_comment.assignment_id = @assignmentId
         ORDER BY file_comment.created_at ASC
       `);
-        return { ...assignment.recordset[0], files: files.recordset, comments: comments.recordset };
+        const row = assignment.recordset[0];
+        const assessment = row.assessmentVersionId && row.assessmentDefinitionJson ? {
+            id: row.id,
+            status: row.status,
+            versionId: row.assessmentVersionId,
+            versionNumber: row.assessmentVersionNumber,
+            formatName: row.assessmentFormatName,
+            instructions: row.assessmentInstructions,
+            definition: parseJson(row.assessmentDefinitionJson, null),
+            printableTemplateFileId: row.assessmentTemplateFileId,
+            answers: parseJson(row.assessmentAnswersJson, {}),
+            calculated: parseJson(row.assessmentCalculatedJson, {}),
+            recommendation: row.assessmentRecommendation,
+            proposedDecision: row.assessmentProposedDecision,
+            comments: row.assessmentComments,
+            responseStatus: row.assessmentResponseStatus,
+            context: {
+                eventName: row.assessmentEventName ?? null,
+                eventLogoFileId: row.assessmentEventLogoFileId ?? null,
+                submissionTitle: row.title ?? null,
+                submissionType: row.assessmentSubmissionType ?? null,
+                knowledgeArea: row.assessmentKnowledgeArea ?? null,
+                knowledgeLine: row.assessmentKnowledgeLine ?? null,
+                registrationAnswers: parseJson(row.assessmentRegistrationAnswersJson, {}),
+            },
+        } : null;
+        return { ...row, files: files.recordset, comments: comments.recordset, assessment };
     }
     async addFileComment(input) {
         const pool = await (0, database_1.getSqlPool)();

@@ -28,7 +28,7 @@ export declare const assignReviewerSchema: z.ZodObject<{
     teamId: z.ZodString;
     reviewerUserId: z.ZodString;
     rubricId: z.ZodOptional<z.ZodString>;
-    assessmentFormatVersionId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    assessmentFormatVersionId: z.ZodString;
     dueAt: z.ZodOptional<z.ZodCoercedDate<unknown>>;
 }, z.core.$strip>;
 export declare const reviewWorkflowReasonSchema: z.ZodObject<{

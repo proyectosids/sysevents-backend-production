@@ -1,7 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.assessmentFinalScore = assessmentFinalScore;
 exports.validateAssessmentDefinition = validateAssessmentDefinition;
 exports.evaluateAssessment = evaluateAssessment;
+function assessmentFinalScore(definition, evaluation) {
+    if (!definition.scoreCalculationId)
+        return null;
+    const value = evaluation.calculated[definition.scoreCalculationId];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 const idPattern = /^[a-z][a-z0-9_]{1,79}$/;
 function round(value, decimals = 2) {
     const factor = 10 ** Math.max(0, Math.min(6, decimals));
@@ -127,6 +134,9 @@ function validateAssessmentDefinition(definition) {
         visited.add(id);
     };
     calculations.forEach((_value, id) => visit(id));
+    if (definition.scoreCalculationId && !calculations.has(definition.scoreCalculationId)) {
+        errors.push(`La calificación final referencia el cálculo inexistente ${definition.scoreCalculationId}.`);
+    }
     for (const rule of definition?.outcomeRules ?? []) {
         if (!fields.has(rule.sourceId) && !calculations.has(rule.sourceId))
             errors.push(`La regla ${rule.id} referencia ${rule.sourceId}, que no existe.`);

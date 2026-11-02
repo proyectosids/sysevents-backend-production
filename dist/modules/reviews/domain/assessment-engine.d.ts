@@ -59,6 +59,7 @@ export type FormulaNode = {
 };
 export type AssessmentDefinition = {
     schemaVersion: 1;
+    scoreCalculationId?: string;
     header?: {
         enabled: boolean;
         title?: string;
@@ -109,5 +110,6 @@ export type AssessmentEvaluation = {
     recommendation: string | null;
     errors: string[];
 };
+export declare function assessmentFinalScore(definition: AssessmentDefinition, evaluation: AssessmentEvaluation): number | null;
 export declare function validateAssessmentDefinition(definition: AssessmentDefinition): string[];
 export declare function evaluateAssessment(definition: AssessmentDefinition, answers: Record<string, unknown>, comments?: string | null): AssessmentEvaluation;

@@ -26,7 +26,7 @@ exports.assignReviewerSchema = zod_1.z.object({
     teamId: zod_1.z.string().uuid(),
     reviewerUserId: zod_1.z.string().uuid(),
     rubricId: zod_1.z.string().uuid().optional(),
-    assessmentFormatVersionId: zod_1.z.string().uuid().nullable().optional(),
+    assessmentFormatVersionId: zod_1.z.string().uuid(),
     dueAt: zod_1.z.coerce.date().optional(),
 });
 exports.reviewWorkflowReasonSchema = zod_1.z.object({
