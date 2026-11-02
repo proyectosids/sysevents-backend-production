@@ -29,6 +29,21 @@ function comparisonMatches(operator, left, right) {
         return left < right;
     return left <= right;
 }
+function isNoOption(option) {
+    return option.id.trim().toLowerCase() === 'no' || option.label.trim().toLowerCase() === 'no';
+}
+function usesCriteriaMinusNo(field) {
+    if (field.matrixScoring === 'criteria_minus_no')
+        return true;
+    if (field.matrixScoring === 'sum_values')
+        return false;
+    const yes = field.options?.find((option) => option.id === 'si');
+    const no = field.options?.find((option) => isNoOption(option));
+    const notApplicable = field.options?.find((option) => ['na', 'no_aplica'].includes(option.id));
+    // Compatibilidad con formatos creados antes de declarar explícitamente el
+    // cálculo "total de criterios menos No".
+    return yes?.value === 1 && no?.value === -1 && notApplicable?.value === 1;
+}
 function validateAssessmentDefinition(definition) {
     const errors = [];
     if (definition?.schemaVersion !== 1)
@@ -178,6 +193,7 @@ function evaluateAssessment(definition, answers, comments) {
         }
         if (field.type === 'matrix') {
             const matrix = (answer && typeof answer === 'object' ? answer : {});
+            const criteriaMinusNo = usesCriteriaMinusNo(field);
             let total = 0;
             let hasNumeric = false;
             for (const row of field.rows ?? []) {
@@ -188,6 +204,10 @@ function evaluateAssessment(definition, answers, comments) {
                     const option = field.options?.find((item) => item.id === selected);
                     if (!option)
                         errors.push(`${field.label}: ${row.label} contiene una opción inválida.`);
+                    else if (criteriaMinusNo) {
+                        total += isNoOption(option) ? 0 : 1;
+                        hasNumeric = true;
+                    }
                     else if (option.value !== null) {
                         total += option.value;
                         hasNumeric = true;

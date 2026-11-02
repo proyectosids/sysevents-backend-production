@@ -16,6 +16,7 @@ export type AssessmentField = {
     min?: number;
     max?: number;
     decimals?: number;
+    matrixScoring?: 'sum_values' | 'criteria_minus_no';
     options?: AssessmentOption[];
     rows?: Array<{
         id: string;
