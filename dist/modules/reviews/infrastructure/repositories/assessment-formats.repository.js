@@ -287,6 +287,8 @@ class AssessmentFormatsRepository {
             throw new app_error_1.AppError('Asignación no encontrada.', 404, 'ASSESSMENT_ASSIGNMENT_NOT_FOUND');
         if (!workspace.versionId || !workspace.definition)
             throw new app_error_1.AppError('La asignación todavía no tiene un formato publicado.', 409, 'ASSESSMENT_FORMAT_PENDING');
+        if (input.kind === 'review' && !['assigned', 'returned_to_reviewer'].includes(workspace.status))
+            throw new app_error_1.AppError('La revisión ya fue enviada o no está disponible para edición.', 409, 'REVIEW_NOT_EDITABLE');
         const evaluation = (0, assessment_engine_1.evaluateAssessment)(workspace.definition, input.answers, input.comments);
         if (input.submit && evaluation.errors.length)
             throw new app_error_1.AppError('Corrige las respuestas antes de enviar.', 422, 'ASSESSMENT_RESPONSE_INVALID', { errors: evaluation.errors });
@@ -307,7 +309,7 @@ class AssessmentFormatsRepository {
           OUTPUT INSERTED.id;
         `);
             const responseId = saved.recordset[0].id;
-            await transaction.request().input('responseId', mssql_1.default.UniqueIdentifier, responseId).input('action', mssql_1.default.NVarChar(30), input.submit ? 'submitted' : 'draft_saved').input('snapshot', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify({ answers: input.answers, calculated: evaluation.calculated, recommendation: evaluation.recommendation, comments: input.comments })).input('userId', mssql_1.default.UniqueIdentifier, input.userId)
+            await transaction.request().input('responseId', mssql_1.default.UniqueIdentifier, responseId).input('action', mssql_1.default.NVarChar(30), input.submit ? 'submitted' : 'draft_saved').input('snapshot', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify({ answers: input.answers, calculated: evaluation.calculated, recommendation: evaluation.recommendation, proposedDecision: input.proposedDecision, comments: input.comments })).input('userId', mssql_1.default.UniqueIdentifier, input.userId)
                 .query('INSERT INTO dbo.assessment_response_history(response_id,action,snapshot_json,acted_by) VALUES(@responseId,@action,@snapshot,@userId)');
             if (input.kind === 'evaluation' && input.submit)
                 await transaction.request().input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId).input('answers', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify(input.answers)).input('comments', mssql_1.default.NVarChar(mssql_1.default.MAX), input.comments ?? null).query(`
@@ -318,7 +320,7 @@ class AssessmentFormatsRepository {
             if (input.kind === 'review' && input.submit) {
                 const finalScore = (0, assessment_engine_1.assessmentFinalScore)(workspace.definition, evaluation);
                 const transition = await transaction.request().input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
-                    .input('recommendation', mssql_1.default.NVarChar(40), evaluation.recommendation ?? input.proposedDecision ?? 'changes_requested')
+                    .input('recommendation', mssql_1.default.NVarChar(40), input.proposedDecision ?? evaluation.recommendation ?? 'changes_requested')
                     .input('comments', mssql_1.default.NVarChar(mssql_1.default.MAX), input.comments ?? null)
                     .input('score', mssql_1.default.Decimal(8, 2), typeof finalScore === 'number' ? finalScore : null)
                     .input('userId', mssql_1.default.UniqueIdentifier, input.userId).query(`

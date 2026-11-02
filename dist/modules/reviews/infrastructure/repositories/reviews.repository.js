@@ -545,6 +545,18 @@ class ReviewsRepository {
         WHERE file_comment.assignment_id = @assignmentId
         ORDER BY file_comment.created_at ASC
       `);
+        const assessmentHistory = await pool.request()
+            .input('assignmentId', mssql_1.default.UniqueIdentifier, assignmentId)
+            .query(`
+        SELECT history.id, history.action, history.snapshot_json AS snapshotJson,
+          history.created_at AS createdAt, history.acted_by AS actorUserId,
+          actor.first_name AS actorFirstName, actor.last_name AS actorLastName
+        FROM dbo.assessment_response_history history
+        INNER JOIN dbo.assessment_responses response ON response.id = history.response_id
+        LEFT JOIN dbo.users actor ON actor.id = history.acted_by
+        WHERE response.review_assignment_id = @assignmentId AND history.action = 'submitted'
+        ORDER BY history.created_at DESC
+      `);
         const row = assignment.recordset[0];
         const assessment = row.assessmentVersionId && row.assessmentDefinitionJson ? {
             id: row.id,
@@ -571,7 +583,16 @@ class ReviewsRepository {
                 registrationAnswers: parseJson(row.assessmentRegistrationAnswersJson, {}),
             },
         } : null;
-        return { ...row, files: files.recordset, comments: comments.recordset, assessment };
+        return {
+            ...row,
+            files: files.recordset,
+            comments: comments.recordset,
+            assessment,
+            assessmentHistory: assessmentHistory.recordset.map(({ snapshotJson, ...item }) => ({
+                ...item,
+                snapshot: parseJson(snapshotJson, {}),
+            })),
+        };
     }
     async addFileComment(input) {
         const pool = await (0, database_1.getSqlPool)();

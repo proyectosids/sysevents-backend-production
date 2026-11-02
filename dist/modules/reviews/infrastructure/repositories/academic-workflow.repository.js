@@ -670,6 +670,28 @@ class AcademicWorkflowRepository {
                 .input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
                 .input('toStatus', mssql_1.default.NVarChar(40), input.toStatus)
                 .query('UPDATE dbo.review_assignments SET status = @toStatus, updated_at = SYSUTCDATETIME() WHERE id = @assignmentId');
+            if (input.toStatus === 'returned_to_reviewer') {
+                await transaction.request()
+                    .input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
+                    .input('actorId', mssql_1.default.UniqueIdentifier, input.actorId)
+                    .input('reason', mssql_1.default.NVarChar(mssql_1.default.MAX), input.reason ?? null)
+                    .query(`
+            INSERT INTO dbo.assessment_response_history (response_id, action, snapshot_json, acted_by)
+            SELECT response.id, 'returned_to_reviewer',
+              (SELECT JSON_QUERY(response.answers_json) AS answers,
+                JSON_QUERY(response.calculated_json) AS calculated,
+                response.recommendation, response.proposed_decision AS proposedDecision,
+                response.comments, @reason AS returnReason
+               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+              @actorId
+            FROM dbo.assessment_responses response
+            WHERE response.review_assignment_id = @assignmentId AND response.status = 'submitted';
+
+            UPDATE dbo.assessment_responses
+            SET status = 'draft', updated_at = SYSUTCDATETIME()
+            WHERE review_assignment_id = @assignmentId AND status = 'submitted';
+          `);
+            }
             await transaction.request()
                 .input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId)
                 .input('action', mssql_1.default.NVarChar(50), input.action)
