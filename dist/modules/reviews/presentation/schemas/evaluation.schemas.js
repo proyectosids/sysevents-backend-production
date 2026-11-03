@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitEvaluationSchema = exports.evaluatorScopeQuerySchema = exports.evaluatorScopeParamsSchema = exports.evaluatorInvitationParamsSchema = exports.evaluationAssignmentParamsSchema = exports.evaluatorAssignmentSchema = exports.acceptEvaluatorInvitationSchema = exports.evaluatorInvitationSchema = void 0;
+exports.submitEvaluationSchema = exports.evaluatorScopeQuerySchema = exports.evaluatorScopeParamsSchema = exports.evaluatorInvitationParamsSchema = exports.evaluationAssignmentParamsSchema = exports.bulkEvaluatorAssignmentSchema = exports.evaluatorAssignmentSchema = exports.acceptEvaluatorInvitationSchema = exports.evaluatorInvitationSchema = void 0;
 const zod_1 = require("zod");
 exports.evaluatorInvitationSchema = zod_1.z.object({
     programId: zod_1.z.string().uuid().nullable().optional(),
@@ -14,6 +14,12 @@ exports.evaluatorAssignmentSchema = zod_1.z.object({
     evaluatorUserId: zod_1.z.string().uuid(),
     evaluationFormId: zod_1.z.string().uuid().nullable().optional(),
     assessmentFormatVersionId: zod_1.z.string().uuid().nullable().optional(),
+    dueAt: zod_1.z.coerce.date().nullable().optional(),
+});
+exports.bulkEvaluatorAssignmentSchema = zod_1.z.object({
+    submissionIds: zod_1.z.array(zod_1.z.string().uuid()).min(1).max(500),
+    evaluatorUserId: zod_1.z.string().uuid(),
+    assessmentFormatVersionId: zod_1.z.string().uuid(),
     dueAt: zod_1.z.coerce.date().nullable().optional(),
 });
 exports.evaluationAssignmentParamsSchema = zod_1.z.object({ id: zod_1.z.string().uuid() });

@@ -13,6 +13,12 @@ export declare const evaluatorAssignmentSchema: z.ZodObject<{
     assessmentFormatVersionId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     dueAt: z.ZodOptional<z.ZodNullable<z.ZodCoercedDate<unknown>>>;
 }, z.core.$strip>;
+export declare const bulkEvaluatorAssignmentSchema: z.ZodObject<{
+    submissionIds: z.ZodArray<z.ZodString>;
+    evaluatorUserId: z.ZodString;
+    assessmentFormatVersionId: z.ZodString;
+    dueAt: z.ZodOptional<z.ZodNullable<z.ZodCoercedDate<unknown>>>;
+}, z.core.$strip>;
 export declare const evaluationAssignmentParamsSchema: z.ZodObject<{
     id: z.ZodString;
 }, z.core.$strip>;

@@ -60,6 +60,24 @@ exports.evaluationsRouter.post('/events/:eventId/evaluator-invitations', authent
         invitationUrl: env_1.env.NODE_ENV === 'production' ? undefined : invitationUrl,
     }, 201);
 }));
+exports.evaluationsRouter.get('/events/:eventId/evaluator-assignments', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = review_schemas_1.reviewTeamEventParamsSchema.parse(req.params);
+    const unrestricted = req.user.permissions.includes('submissions.manage');
+    if (!unrestricted && !(await academicWorkflowRepository.listMyScopes(req.user.id)).some((scope) => scope.eventId === eventId && scope.role === 'supervisor')) {
+        throw new app_error_1.AppError('Sólo el supervisor puede consultar estas asignaciones.', 403, 'SUPERVISOR_REQUIRED');
+    }
+    return (0, api_response_1.sendSuccess)(res, 'Evaluator assignments retrieved successfully', await evaluationsRepository.listEventAssignments(eventId, req.user.id, unrestricted));
+}));
+exports.evaluationsRouter.post('/events/:eventId/evaluator-assignments/bulk', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = review_schemas_1.reviewTeamEventParamsSchema.parse(req.params);
+    const input = evaluation_schemas_1.bulkEvaluatorAssignmentSchema.parse(req.body);
+    const unrestricted = req.user.permissions.includes('submissions.manage');
+    if (!unrestricted && !(await academicWorkflowRepository.listMyScopes(req.user.id)).some((scope) => scope.eventId === eventId && scope.role === 'supervisor')) {
+        throw new app_error_1.AppError('Sólo el supervisor puede asignar evaluaciones.', 403, 'SUPERVISOR_REQUIRED');
+    }
+    const assignments = await evaluationsRepository.assignMany({ ...input, eventId, assignedBy: req.user.id, supervisorUserId: req.user.id, unrestricted });
+    return (0, api_response_1.sendSuccess)(res, 'Evaluator assignments created successfully', assignments, 201);
+}));
 exports.evaluationsRouter.get('/events/:eventId/evaluator-invitations', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = review_schemas_1.reviewTeamEventParamsSchema.parse(req.params);
     const unrestricted = req.user.permissions.includes('submissions.manage');

@@ -8,6 +8,91 @@ const mssql_1 = __importDefault(require("mssql"));
 const database_1 = require("../../../../config/database");
 const app_error_1 = require("../../../../shared/errors/app-error");
 class EvaluationsRepository {
+    async listEventAssignments(eventId, userId, unrestricted = false) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .input('userId', mssql_1.default.UniqueIdentifier, userId)
+            .input('unrestricted', mssql_1.default.Bit, unrestricted)
+            .query(`
+        SELECT assignment.id, assignment.submission_id AS submissionId,
+          assignment.evaluator_user_id AS evaluatorUserId, assignment.status,
+          assignment.assessment_format_version_id AS assessmentFormatVersionId
+        FROM dbo.event_evaluator_assignments assignment
+        WHERE assignment.event_id = @eventId AND assignment.status <> 'cancelled'
+          AND (@unrestricted = 1 OR EXISTS (
+            SELECT 1 FROM dbo.event_program_staff_assignments supervisor
+            WHERE supervisor.event_id = assignment.event_id AND supervisor.user_id = @userId
+              AND supervisor.staff_role = 'supervisor' AND supervisor.is_active = 1
+              AND (supervisor.program_id IS NULL OR supervisor.program_id = assignment.program_id)
+          ))
+        ORDER BY assignment.created_at DESC
+      `);
+        return result.recordset;
+    }
+    async assignMany(input) {
+        const pool = await (0, database_1.getSqlPool)();
+        const transaction = pool.transaction();
+        await transaction.begin();
+        try {
+            const assignments = [];
+            for (const submissionId of [...new Set(input.submissionIds)]) {
+                const result = await transaction.request()
+                    .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId)
+                    .input('submissionId', mssql_1.default.UniqueIdentifier, submissionId)
+                    .input('evaluatorUserId', mssql_1.default.UniqueIdentifier, input.evaluatorUserId)
+                    .input('assessmentFormatVersionId', mssql_1.default.UniqueIdentifier, input.assessmentFormatVersionId)
+                    .input('dueAt', mssql_1.default.DateTime2, input.dueAt ?? null)
+                    .input('assignedBy', mssql_1.default.UniqueIdentifier, input.assignedBy)
+                    .input('supervisorUserId', mssql_1.default.UniqueIdentifier, input.supervisorUserId)
+                    .input('unrestricted', mssql_1.default.Bit, input.unrestricted)
+                    .query(`
+            INSERT INTO dbo.event_evaluator_assignments (
+              event_id, program_id, submission_id, evaluator_user_id, assessment_format_version_id, due_at, assigned_by
+            )
+            OUTPUT INSERTED.*
+            SELECT submission.event_id, submission.program_id, submission.id, @evaluatorUserId, @assessmentFormatVersionId, @dueAt, @assignedBy
+            FROM dbo.submissions submission
+            WHERE submission.id = @submissionId AND submission.event_id = @eventId
+              AND submission.status NOT IN ('draft', 'rejected')
+              AND (@unrestricted = 1 OR EXISTS (
+                SELECT 1 FROM dbo.event_program_staff_assignments supervisor
+                WHERE supervisor.event_id = submission.event_id AND supervisor.user_id = @supervisorUserId
+                  AND supervisor.staff_role = 'supervisor' AND supervisor.is_active = 1
+                  AND (supervisor.program_id IS NULL OR supervisor.program_id = submission.program_id)
+              ))
+              AND EXISTS (
+                SELECT 1 FROM dbo.event_program_staff_assignments evaluator
+                WHERE evaluator.event_id = submission.event_id AND evaluator.user_id = @evaluatorUserId
+                  AND evaluator.staff_role = 'evaluator' AND evaluator.is_active = 1
+                  AND (evaluator.program_id IS NULL OR evaluator.program_id = submission.program_id)
+              )
+              AND EXISTS (
+                SELECT 1 FROM dbo.event_assessment_format_versions version
+                INNER JOIN dbo.event_assessment_formats format ON format.id = version.format_id
+                INNER JOIN dbo.event_assessment_format_scopes scope ON scope.format_id = format.id
+                WHERE version.id = @assessmentFormatVersionId AND version.status = 'published'
+                  AND format.event_id = submission.event_id AND format.purpose = 'evaluation' AND format.status = 'published'
+                  AND (scope.program_id IS NULL OR scope.program_id = submission.program_id)
+                  AND (scope.submission_type_id IS NULL OR scope.submission_type_id = submission.submission_type_id)
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.event_evaluator_assignments existing
+                WHERE existing.submission_id = submission.id AND existing.status <> 'cancelled'
+              )
+          `);
+                if (!result.recordset[0])
+                    throw new app_error_1.AppError('Uno de los trabajos ya fue asignado o no es compatible con el evaluador y formato seleccionados.', 409, 'EVALUATOR_BULK_ASSIGNMENT_CONFLICT');
+                assignments.push(result.recordset[0]);
+            }
+            await transaction.commit();
+            return assignments;
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
     async listInvitations(eventId, userId, unrestricted = false) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool.request()

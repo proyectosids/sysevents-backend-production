@@ -1,5 +1,16 @@
 import sql from 'mssql';
 export declare class EvaluationsRepository {
+    listEventAssignments(eventId: string, userId: string, unrestricted?: boolean): Promise<sql.IRecordSet<any>>;
+    assignMany(input: {
+        eventId: string;
+        submissionIds: string[];
+        evaluatorUserId: string;
+        assessmentFormatVersionId: string;
+        dueAt?: Date | null;
+        assignedBy: string;
+        supervisorUserId: string;
+        unrestricted: boolean;
+    }): Promise<unknown[]>;
     listInvitations(eventId: string, userId: string, unrestricted?: boolean): Promise<sql.IRecordSet<any>>;
     findInvitation(invitationId: string, eventId: string): Promise<{
         id: string;
