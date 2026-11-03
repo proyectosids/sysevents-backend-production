@@ -51,7 +51,7 @@ export declare class AssessmentFormatsRepository {
         versionId: string;
     }>;
     eligibleVersions(eventId: string, purpose: string, programId?: string | null, submissionTypeId?: string | null): Promise<sql.IRecordSet<any>>;
-    workspace(kind: 'review' | 'evaluation', assignmentId: string, userId: string): Promise<any>;
+    workspace(kind: 'review' | 'evaluation', assignmentId: string, userId: string, unrestricted?: boolean): Promise<any>;
     saveResponse(input: {
         kind: 'review' | 'evaluation';
         assignmentId: string;

@@ -14,9 +14,11 @@ const events_repository_1 = require("../../events/infrastructure/repositories/ev
 const file_storage_service_1 = require("../../files/application/services/file-storage.service");
 const files_repository_1 = require("../../files/infrastructure/repositories/files.repository");
 const auth_service_1 = require("../../iam/application/services/auth.service");
+const iam_repository_1 = require("../../iam/infrastructure/repositories/iam.repository");
 const authenticate_middleware_1 = require("../../iam/presentation/middlewares/authenticate.middleware");
 const optional_authenticate_middleware_1 = require("../../iam/presentation/middlewares/optional-authenticate.middleware");
 const require_permission_middleware_1 = require("../../iam/presentation/middlewares/require-permission.middleware");
+const rate_limiters_1 = require("../../security/presentation/rate-limiters");
 const registrations_repository_1 = require("../infrastructure/repositories/registrations.repository");
 const registration_schemas_1 = require("./schemas/registration.schemas");
 exports.registrationsRouter = (0, express_1.Router)();
@@ -24,6 +26,7 @@ exports.myRegistrationsRouter = (0, express_1.Router)();
 const eventsRepository = new events_repository_1.EventsRepository();
 const registrationsRepository = new registrations_repository_1.RegistrationsRepository();
 const authService = new auth_service_1.AuthService();
+const iamRepository = new iam_repository_1.IamRepository();
 const filesRepository = new files_repository_1.FilesRepository();
 const fileStorageService = new file_storage_service_1.FileStorageService();
 const registrationFileUpload = (0, multer_1.default)({
@@ -210,6 +213,18 @@ exports.registrationsRouter.post('/:eventId/registration-files', optional_authen
         throw error;
     }
 }));
+exports.registrationsRouter.post('/:eventId/participant-account-check', rate_limiters_1.loginRateLimiter, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = registration_schemas_1.registrationEventParamsSchema.parse(req.params);
+    const { email } = registration_schemas_1.participantAccountCheckSchema.parse(req.body);
+    const event = await eventsRepository.findEventById(eventId);
+    if (!event || event.status !== 'published') {
+        throw new app_error_1.AppError('Event not found', 404, 'EVENT_NOT_FOUND');
+    }
+    const account = await iamRepository.findUserByEmail(email);
+    return (0, api_response_1.sendSuccess)(res, 'Participant account status retrieved successfully', {
+        nextStep: account ? 'login' : 'create',
+    });
+}));
 exports.registrationsRouter.post('/:eventId/participant-enrollments', (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = registration_schemas_1.registrationEventParamsSchema.parse(req.params);
     const input = registration_schemas_1.createParticipantEnrollmentSchema.parse(req.body);
@@ -242,6 +257,46 @@ exports.registrationsRouter.post('/:eventId/participant-enrollments', (0, async_
     return (0, api_response_1.sendSuccess)(res, 'Participant enrollment created successfully', {
         registration,
         session,
+    }, 201);
+}));
+exports.registrationsRouter.post('/:eventId/participant-enrollments/current-account', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { eventId } = registration_schemas_1.registrationEventParamsSchema.parse(req.params);
+    const input = registration_schemas_1.continueParticipantEnrollmentSchema.parse(req.body);
+    const event = await eventsRepository.findEventById(eventId);
+    if (!event || event.status !== 'published') {
+        throw new app_error_1.AppError('Event not found', 404, 'EVENT_NOT_FOUND');
+    }
+    const participant = await iamRepository.findUserById(req.user.id);
+    if (!participant || participant.status !== 'active') {
+        throw new app_error_1.AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+    const previous = (await registrationsRepository.listMyRegistrations(participant.id))
+        .find((registration) => registration.eventId === eventId && registration.status !== 'cancelled');
+    if (previous) {
+        return (0, api_response_1.sendSuccess)(res, 'Participant is already registered for this event', {
+            registration: previous,
+            alreadyRegistered: true,
+        });
+    }
+    const registrationTypeId = input.registrationTypeId
+        ?? (await registrationsRepository.findDefaultRegistrationTypeForProgram(eventId, input.programId ?? null))?.id;
+    if (!registrationTypeId) {
+        throw new app_error_1.AppError('No registration package is available for this program', 409, 'REGISTRATION_PACKAGE_REQUIRED');
+    }
+    const registration = await registrationsRepository.createRegistration({
+        eventId,
+        registrationTypeId,
+        programId: input.programId ?? null,
+        userId: participant.id,
+        email: participant.email,
+        firstName: participant.firstName,
+        lastName: participant.lastName,
+        deferForm: true,
+        deferPaymentSelection: true,
+    });
+    return (0, api_response_1.sendSuccess)(res, 'Participant enrollment created successfully', {
+        registration,
+        alreadyRegistered: false,
     }, 201);
 }));
 exports.registrationsRouter.post('/:eventId/registrations', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {

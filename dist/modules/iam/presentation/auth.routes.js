@@ -69,7 +69,7 @@ exports.authRouter.post('/login', rate_limiters_1.loginRateLimiter, (0, async_ha
     return (0, api_response_1.sendSuccess)(res, 'Login successful', session);
 }));
 exports.authRouter.post('/forgot-password', rate_limiters_1.loginRateLimiter, (0, async_handler_1.asyncHandler)(async (req, res) => {
-    const { email } = auth_schemas_1.forgotPasswordSchema.parse(req.body);
+    const { email, returnTo } = auth_schemas_1.forgotPasswordSchema.parse(req.body);
     const user = await iamRepository.findUserByEmail(email);
     if (user?.status === 'active') {
         const token = crypto_1.default.randomBytes(32).toString('hex');
@@ -81,6 +81,10 @@ exports.authRouter.post('/forgot-password', rate_limiters_1.loginRateLimiter, (0
         });
         const resetUrl = new URL('/reset-password', env_1.env.APP_PUBLIC_URL);
         resetUrl.searchParams.set('token', token);
+        if (returnTo?.startsWith('/participant-register?')) {
+            resetUrl.searchParams.set('returnTo', returnTo);
+            resetUrl.searchParams.set('email', user.email);
+        }
         await emailService.sendTemplate('password_reset', user.email, {
             name: user.firstName,
             resetUrl: resetUrl.toString(),

@@ -135,7 +135,7 @@ exports.assessmentFormatsRouter.get('/events/:eventId/assessment-formats-eligibl
 }));
 exports.assessmentFormatsRouter.get('/assessments/:kind/:assignmentId', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { kind, assignmentId } = assessment_schemas_1.assessmentAssignmentParamsSchema.parse(req.params);
-    const workspace = await repository.workspace(kind, assignmentId, req.user.id);
+    const workspace = await repository.workspace(kind, assignmentId, req.user.id, req.user.permissions.includes('submissions.manage'));
     if (!workspace)
         throw new app_error_1.AppError('Asignación no encontrada.', 404, 'ASSESSMENT_ASSIGNMENT_NOT_FOUND');
     return (0, api_response_1.sendSuccess)(res, 'Formato de asignación recuperado.', workspace);

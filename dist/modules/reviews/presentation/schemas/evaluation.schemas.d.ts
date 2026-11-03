@@ -22,6 +22,12 @@ export declare const bulkEvaluatorAssignmentSchema: z.ZodObject<{
 export declare const evaluationAssignmentParamsSchema: z.ZodObject<{
     id: z.ZodString;
 }, z.core.$strip>;
+export declare const evaluationReturnSchema: z.ZodObject<{
+    reason: z.ZodString;
+}, z.core.$strip>;
+export declare const evaluationReleaseSchema: z.ZodObject<{
+    notes: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, z.core.$strip>;
 export declare const evaluatorInvitationParamsSchema: z.ZodObject<{
     eventId: z.ZodString;
     invitationId: z.ZodString;

@@ -1,6 +1,9 @@
 import sql from 'mssql';
 export declare class EvaluationsRepository {
     listEventAssignments(eventId: string, userId: string, unrestricted?: boolean): Promise<sql.IRecordSet<any>>;
+    assignmentForSupervisor(assignmentId: string, userId: string, unrestricted?: boolean): Promise<any>;
+    returnToEvaluator(assignmentId: string, reason: string, reviewedBy: string): Promise<any>;
+    release(assignmentId: string, notes: string | null, reviewedBy: string): Promise<any>;
     assignMany(input: {
         eventId: string;
         submissionIds: string[];

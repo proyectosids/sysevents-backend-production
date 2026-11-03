@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateRegistrationStatusSchema = exports.updateTeamCertificateSettingsSchema = exports.issueCertificateSchema = exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema = exports.updateEventMaterialSchema = exports.createEventMaterialSchema = exports.updateRegistrationFormFieldSchema = exports.createRegistrationFormFieldSchema = exports.updateRegistrationFormSchema = exports.createRegistrationFormSchema = exports.updateMyRegistrationSchema = exports.createParticipantEnrollmentSchema = exports.createRegistrationSchema = exports.updateRegistrationAddonSchema = exports.createRegistrationAddonSchema = exports.updateRegistrationTypeSchema = exports.createRegistrationTypeSchema = exports.certificateIdParamsSchema = exports.certificateTemplateParamsSchema = exports.eventMaterialParamsSchema = exports.registrationAddonParamsSchema = exports.registrationFormFieldParamsSchema = exports.registrationFormParamsSchema = exports.registrationParamsSchema = exports.registrationEventParamsSchema = void 0;
+exports.updateRegistrationStatusSchema = exports.updateTeamCertificateSettingsSchema = exports.issueCertificateSchema = exports.updateCertificateTemplateSchema = exports.createCertificateTemplateSchema = exports.updateEventMaterialSchema = exports.createEventMaterialSchema = exports.updateRegistrationFormFieldSchema = exports.createRegistrationFormFieldSchema = exports.updateRegistrationFormSchema = exports.createRegistrationFormSchema = exports.updateMyRegistrationSchema = exports.participantAccountCheckSchema = exports.continueParticipantEnrollmentSchema = exports.createParticipantEnrollmentSchema = exports.createRegistrationSchema = exports.updateRegistrationAddonSchema = exports.createRegistrationAddonSchema = exports.updateRegistrationTypeSchema = exports.createRegistrationTypeSchema = exports.certificateIdParamsSchema = exports.certificateTemplateParamsSchema = exports.eventMaterialParamsSchema = exports.registrationAddonParamsSchema = exports.registrationFormFieldParamsSchema = exports.registrationFormParamsSchema = exports.registrationParamsSchema = exports.registrationEventParamsSchema = void 0;
 const zod_1 = require("zod");
 exports.registrationEventParamsSchema = zod_1.z.object({
     eventId: zod_1.z.string().uuid(),
@@ -80,6 +80,17 @@ exports.createParticipantEnrollmentSchema = zod_1.z.object({
     password: zod_1.z.string().min(8).max(200),
     firstName: zod_1.z.string().min(1).max(120),
     lastName: zod_1.z.string().min(1).max(120),
+});
+exports.continueParticipantEnrollmentSchema = zod_1.z.object({
+    registrationTypeId: zod_1.z.string().uuid().optional(),
+    programId: zod_1.z.string().uuid().nullable().optional(),
+    addonSelections: zod_1.z.array(zod_1.z.object({
+        addonId: zod_1.z.string().uuid(),
+        quantity: zod_1.z.number().int().positive().max(20).default(1),
+    })).optional(),
+});
+exports.participantAccountCheckSchema = zod_1.z.object({
+    email: zod_1.z.string().trim().email().max(255),
 });
 exports.updateMyRegistrationSchema = zod_1.z.object({
     formId: zod_1.z.string().uuid().optional(),

@@ -58,21 +58,9 @@ class AuthService {
             return this.register(input, { assignPlatformAdminIfFirstUser: false });
         }
         if (existingUser.status !== 'active') {
-            throw new app_error_1.AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+            throw new app_error_1.AppError('Este correo tiene una cuenta pendiente de activación.', 409, 'ACCOUNT_ACTIVATION_REQUIRED');
         }
-        const passwordMatches = await bcryptjs_1.default.compare(input.password, existingUser.passwordHash);
-        if (!passwordMatches) {
-            throw new app_error_1.AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
-        }
-        return {
-            id: existingUser.id,
-            email: existingUser.email,
-            firstName: existingUser.firstName,
-            lastName: existingUser.lastName,
-            status: existingUser.status,
-            createdAt: existingUser.createdAt,
-            updatedAt: existingUser.updatedAt,
-        };
+        throw new app_error_1.AppError('Ya existe una cuenta asociada a este correo. Inicia sesión para inscribirte al nuevo evento.', 409, 'ACCOUNT_ALREADY_EXISTS');
     }
     async login(email, password) {
         const user = await this.iamRepository.findUserByEmail(email);

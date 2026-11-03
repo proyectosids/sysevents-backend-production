@@ -17,8 +17,25 @@ class EvaluationsRepository {
             .query(`
         SELECT assignment.id, assignment.submission_id AS submissionId,
           assignment.evaluator_user_id AS evaluatorUserId, assignment.status,
-          assignment.assessment_format_version_id AS assessmentFormatVersionId
+          assignment.assessment_format_version_id AS assessmentFormatVersionId,
+          assignment.supervisor_notes AS supervisorNotes, assignment.reviewed_at AS reviewedAt,
+          assignment.released_at AS releasedAt, submission.title AS submissionTitle,
+          submission.program_id AS programId, program.name AS programName,
+          submission_type.name AS submissionType, area.name AS knowledgeAreaName,
+          line.name AS knowledgeLineName, evaluator.first_name AS evaluatorFirstName,
+          evaluator.last_name AS evaluatorLastName, evaluator.email AS evaluatorEmail,
+          response.calculated_json AS calculatedJson, response.recommendation,
+          response.comments, response.submitted_at AS submittedAt, format.name AS formatName
         FROM dbo.event_evaluator_assignments assignment
+        INNER JOIN dbo.submissions submission ON submission.id = assignment.submission_id
+        INNER JOIN dbo.users evaluator ON evaluator.id = assignment.evaluator_user_id
+        LEFT JOIN dbo.event_programs program ON program.id = submission.program_id
+        LEFT JOIN dbo.submission_types submission_type ON submission_type.id = submission.submission_type_id
+        LEFT JOIN dbo.event_knowledge_areas area ON area.id = submission.knowledge_area_id
+        LEFT JOIN dbo.event_knowledge_lines line ON line.id = submission.knowledge_line_id
+        LEFT JOIN dbo.assessment_responses response ON response.evaluator_assignment_id = assignment.id
+        LEFT JOIN dbo.event_assessment_format_versions version ON version.id = assignment.assessment_format_version_id
+        LEFT JOIN dbo.event_assessment_formats format ON format.id = version.format_id
         WHERE assignment.event_id = @eventId AND assignment.status <> 'cancelled'
           AND (@unrestricted = 1 OR EXISTS (
             SELECT 1 FROM dbo.event_program_staff_assignments supervisor
@@ -29,6 +46,58 @@ class EvaluationsRepository {
         ORDER BY assignment.created_at DESC
       `);
         return result.recordset;
+    }
+    async assignmentForSupervisor(assignmentId, userId, unrestricted = false) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request().input('assignmentId', mssql_1.default.UniqueIdentifier, assignmentId).input('userId', mssql_1.default.UniqueIdentifier, userId).input('unrestricted', mssql_1.default.Bit, unrestricted).query(`
+      SELECT TOP 1 assignment.id, assignment.status, assignment.evaluator_user_id AS evaluatorUserId,
+        submission.title AS submissionTitle, submission.owner_user_id AS participantUserId,
+        participant.email AS participantEmail, evaluator.email AS evaluatorEmail
+      FROM dbo.event_evaluator_assignments assignment
+      INNER JOIN dbo.submissions submission ON submission.id=assignment.submission_id
+      INNER JOIN dbo.users participant ON participant.id=submission.owner_user_id
+      INNER JOIN dbo.users evaluator ON evaluator.id=assignment.evaluator_user_id
+      WHERE assignment.id=@assignmentId AND (@unrestricted=1 OR EXISTS(
+        SELECT 1 FROM dbo.event_program_staff_assignments supervisor
+        WHERE supervisor.event_id=assignment.event_id AND supervisor.user_id=@userId
+          AND supervisor.staff_role='supervisor' AND supervisor.is_active=1
+          AND (supervisor.program_id IS NULL OR supervisor.program_id=assignment.program_id)
+      ))
+    `);
+        return result.recordset[0] ?? null;
+    }
+    async returnToEvaluator(assignmentId, reason, reviewedBy) {
+        const pool = await (0, database_1.getSqlPool)();
+        const transaction = pool.transaction();
+        await transaction.begin();
+        try {
+            const updated = await transaction.request().input('id', mssql_1.default.UniqueIdentifier, assignmentId).input('reason', mssql_1.default.NVarChar(mssql_1.default.MAX), reason).input('reviewedBy', mssql_1.default.UniqueIdentifier, reviewedBy).query(`
+        UPDATE dbo.event_evaluator_assignments SET status='returned_to_evaluator',supervisor_notes=@reason,reviewed_by=@reviewedBy,reviewed_at=SYSUTCDATETIME(),updated_at=SYSUTCDATETIME() OUTPUT INSERTED.id WHERE id=@id AND status='submitted';
+        UPDATE dbo.assessment_responses SET status='draft',updated_at=SYSUTCDATETIME() WHERE evaluator_assignment_id=@id;
+        INSERT INTO dbo.assessment_response_history(response_id,action,snapshot_json,acted_by)
+        SELECT response.id,'returned',COALESCE((SELECT TOP 1 history.snapshot_json FROM dbo.assessment_response_history history WHERE history.response_id=response.id ORDER BY history.created_at DESC),'{}'),@reviewedBy
+        FROM dbo.assessment_responses response WHERE response.evaluator_assignment_id=@id;
+      `);
+            if (!updated.recordset[0])
+                throw new app_error_1.AppError('La evaluación ya no está pendiente de revisión.', 409, 'EVALUATION_NOT_REVIEWABLE');
+            await transaction.commit();
+            return updated.recordset[0];
+        }
+        catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
+    async release(assignmentId, notes, reviewedBy) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request().input('id', mssql_1.default.UniqueIdentifier, assignmentId).input('notes', mssql_1.default.NVarChar(mssql_1.default.MAX), notes).input('reviewedBy', mssql_1.default.UniqueIdentifier, reviewedBy).query(`
+      UPDATE dbo.event_evaluator_assignments
+      SET status='released',supervisor_notes=@notes,reviewed_by=@reviewedBy,reviewed_at=SYSUTCDATETIME(),released_at=SYSUTCDATETIME(),updated_at=SYSUTCDATETIME()
+      OUTPUT INSERTED.id WHERE id=@id AND status='submitted'
+    `);
+        if (!result.recordset[0])
+            throw new app_error_1.AppError('La evaluación ya no está pendiente de revisión.', 409, 'EVALUATION_NOT_REVIEWABLE');
+        return result.recordset[0];
     }
     async assignMany(input) {
         const pool = await (0, database_1.getSqlPool)();
@@ -157,12 +226,14 @@ class EvaluationsRepository {
         INSERT INTO dbo.event_evaluator_invitations (
           event_id, program_id, email, user_id, token_hash, expires_at, invited_by
         )
-        OUTPUT INSERTED.id, (SELECT name FROM dbo.events WHERE id = @eventId) AS event_name
+        OUTPUT INSERTED.id
         SELECT @eventId, @programId, @email, invited_user.id, @tokenHash, @expiresAt, @invitedBy
         FROM (SELECT 1 AS marker) source
         LEFT JOIN dbo.users invited_user ON invited_user.email = @email;
+
+        SELECT TOP 1 name AS event_name FROM dbo.events WHERE id = @eventId;
       `);
-        return result.recordset[0];
+        return { id: result.recordsets[0][0].id, event_name: result.recordsets[1][0].event_name };
     }
     async acceptInvitation(tokenHash, userId, userEmail) {
         const pool = await (0, database_1.getSqlPool)();
@@ -296,7 +367,7 @@ class EvaluationsRepository {
         const result = await pool.request()
             .input('userId', mssql_1.default.UniqueIdentifier, userId)
             .query(`
-        SELECT assignment.id, assignment.status, assignment.due_at AS dueAt,
+        SELECT assignment.id, assignment.status, assignment.due_at AS dueAt, assignment.supervisor_notes AS supervisorNotes,
           event.id AS eventId, event.name AS eventName,
           program.id AS programId, program.name AS programName,
           submission.id AS submissionId, submission.title AS submissionTitle,
@@ -386,7 +457,7 @@ class EvaluationsRepository {
           submission.id AS submissionId, submission.title AS submissionTitle,
           submission_type.name AS submissionType,
           evaluator.first_name AS evaluatorFirstName, evaluator.last_name AS evaluatorLastName,
-          evaluation.answers_json AS answersJson, evaluation.comments,
+          evaluation.answers_json AS answersJson, evaluation.comments, assignment.supervisor_notes AS supervisorNotes,
           response.calculated_json AS calculatedJson, response.recommendation,
           dynamic_format.name AS formatName, dynamic_version.definition_json AS definitionJson
         FROM dbo.event_evaluations evaluation
@@ -397,7 +468,7 @@ class EvaluationsRepository {
         LEFT JOIN dbo.assessment_responses response ON response.evaluator_assignment_id = assignment.id AND response.status = 'submitted'
         LEFT JOIN dbo.event_assessment_format_versions dynamic_version ON dynamic_version.id = response.format_version_id
         LEFT JOIN dbo.event_assessment_formats dynamic_format ON dynamic_format.id = dynamic_version.format_id
-        WHERE submission.owner_user_id = @userId AND assignment.status = 'submitted'
+        WHERE submission.owner_user_id = @userId AND assignment.status = 'released'
         ORDER BY evaluation.submitted_at DESC
       `);
         return result.recordset;

@@ -121,6 +121,26 @@ exports.evaluationsRouter.post('/events/:eventId/evaluator-assignments', authent
     const assignment = await evaluationsRepository.assign({ ...input, assignedBy: req.user.id });
     return (0, api_response_1.sendSuccess)(res, 'Evaluator assignment created successfully', assignment, 201);
 }));
+exports.evaluationsRouter.post('/evaluator-assignments/:id/return', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { id } = evaluation_schemas_1.evaluationAssignmentParamsSchema.parse(req.params);
+    const { reason } = evaluation_schemas_1.evaluationReturnSchema.parse(req.body);
+    const assignment = await evaluationsRepository.assignmentForSupervisor(id, req.user.id, req.user.permissions.includes('submissions.manage'));
+    if (!assignment)
+        throw new app_error_1.AppError('Asignación no encontrada.', 404, 'EVALUATION_ASSIGNMENT_NOT_FOUND');
+    await evaluationsRepository.returnToEvaluator(id, reason, req.user.id);
+    await emailService.sendTemplate('evaluation_returned', assignment.evaluatorEmail, { submissionTitle: assignment.submissionTitle, reason });
+    return (0, api_response_1.sendSuccess)(res, 'Evaluación devuelta al evaluador.');
+}));
+exports.evaluationsRouter.post('/evaluator-assignments/:id/release', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
+    const { id } = evaluation_schemas_1.evaluationAssignmentParamsSchema.parse(req.params);
+    const { notes = null } = evaluation_schemas_1.evaluationReleaseSchema.parse(req.body);
+    const assignment = await evaluationsRepository.assignmentForSupervisor(id, req.user.id, req.user.permissions.includes('submissions.manage'));
+    if (!assignment)
+        throw new app_error_1.AppError('Asignación no encontrada.', 404, 'EVALUATION_ASSIGNMENT_NOT_FOUND');
+    await evaluationsRepository.release(id, notes ?? null, req.user.id);
+    await emailService.sendTemplate('evaluation_released', assignment.participantEmail, { submissionTitle: assignment.submissionTitle });
+    return (0, api_response_1.sendSuccess)(res, 'Evaluación liberada al participante.');
+}));
 exports.evaluationsRouter.delete('/events/:eventId/evaluators/:userId', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId, userId } = evaluation_schemas_1.evaluatorScopeParamsSchema.parse(req.params);
     const { programId = null } = evaluation_schemas_1.evaluatorScopeQuerySchema.parse({

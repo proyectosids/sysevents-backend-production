@@ -106,6 +106,17 @@ export declare const createParticipantEnrollmentSchema: z.ZodObject<{
     firstName: z.ZodString;
     lastName: z.ZodString;
 }, z.core.$strip>;
+export declare const continueParticipantEnrollmentSchema: z.ZodObject<{
+    registrationTypeId: z.ZodOptional<z.ZodString>;
+    programId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    addonSelections: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        addonId: z.ZodString;
+        quantity: z.ZodDefault<z.ZodNumber>;
+    }, z.core.$strip>>>;
+}, z.core.$strip>;
+export declare const participantAccountCheckSchema: z.ZodObject<{
+    email: z.ZodString;
+}, z.core.$strip>;
 export declare const updateMyRegistrationSchema: z.ZodObject<{
     formId: z.ZodOptional<z.ZodString>;
     formAnswers: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;

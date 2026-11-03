@@ -237,12 +237,12 @@ class AssessmentFormatsRepository {
     `);
         return result.recordset;
     }
-    async workspace(kind, assignmentId, userId) {
+    async workspace(kind, assignmentId, userId, unrestricted = false) {
         const pool = await (0, database_1.getSqlPool)();
         const table = kind === 'review' ? 'review_assignments' : 'event_evaluator_assignments';
         const userColumn = kind === 'review' ? 'reviewer_user_id' : 'evaluator_user_id';
         const responseColumn = kind === 'review' ? 'review_assignment_id' : 'evaluator_assignment_id';
-        const result = await pool.request().input('assignmentId', mssql_1.default.UniqueIdentifier, assignmentId).input('userId', mssql_1.default.UniqueIdentifier, userId).query(`
+        const result = await pool.request().input('assignmentId', mssql_1.default.UniqueIdentifier, assignmentId).input('userId', mssql_1.default.UniqueIdentifier, userId).input('unrestricted', mssql_1.default.Bit, unrestricted).query(`
       SELECT assignment.id,assignment.status,version.id AS versionId,version.version_number AS versionNumber,version.definition_json AS definitionJson,
         format.id AS formatId,format.name AS formatName,format.instructions,format.purpose,version.printable_template_file_id AS printableTemplateFileId,
         response.id AS responseId,response.answers_json AS answersJson,response.calculated_json AS calculatedJson,response.recommendation,response.proposed_decision AS proposedDecision,response.comments,response.status AS responseStatus,
@@ -263,7 +263,15 @@ class AssessmentFormatsRepository {
       LEFT JOIN dbo.event_assessment_format_versions version ON version.id=assignment.assessment_format_version_id
       LEFT JOIN dbo.event_assessment_formats format ON format.id=version.format_id
       LEFT JOIN dbo.assessment_responses response ON response.${responseColumn}=assignment.id
-      WHERE assignment.id=@assignmentId AND assignment.${userColumn}=@userId
+      WHERE assignment.id=@assignmentId AND (
+        assignment.${userColumn}=@userId
+        ${kind === 'evaluation' ? `OR @unrestricted=1 OR EXISTS(
+          SELECT 1 FROM dbo.event_program_staff_assignments supervisor
+          WHERE supervisor.event_id=assignment.event_id AND supervisor.user_id=@userId
+            AND supervisor.staff_role='supervisor' AND supervisor.is_active=1
+            AND (supervisor.program_id IS NULL OR supervisor.program_id=assignment.program_id)
+        )` : ''}
+      )
     `);
         const row = result.recordset[0];
         if (!row)
@@ -289,6 +297,8 @@ class AssessmentFormatsRepository {
             throw new app_error_1.AppError('La asignación todavía no tiene un formato publicado.', 409, 'ASSESSMENT_FORMAT_PENDING');
         if (input.kind === 'review' && !['assigned', 'returned_to_reviewer'].includes(workspace.status))
             throw new app_error_1.AppError('La revisión ya fue enviada o no está disponible para edición.', 409, 'REVIEW_NOT_EDITABLE');
+        if (input.kind === 'evaluation' && !['pending', 'in_progress', 'returned_to_evaluator'].includes(workspace.status))
+            throw new app_error_1.AppError('La evaluación ya fue enviada o no está disponible para edición.', 409, 'EVALUATION_NOT_EDITABLE');
         const evaluation = (0, assessment_engine_1.evaluateAssessment)(workspace.definition, input.answers, input.comments);
         if (input.submit && evaluation.errors.length)
             throw new app_error_1.AppError('Corrige las respuestas antes de enviar.', 422, 'ASSESSMENT_RESPONSE_INVALID', { errors: evaluation.errors });
@@ -308,14 +318,22 @@ class AssessmentFormatsRepository {
           VALUES(@versionId,@reviewId,@evaluationId,@userId,@answers,@calculated,@recommendation,@proposedDecision,@comments,@status,CASE WHEN @status='submitted' THEN SYSUTCDATETIME() ELSE NULL END)
           OUTPUT INSERTED.id;
         `);
+            const corrected = input.submit && ['returned_to_reviewer', 'returned_to_evaluator'].includes(workspace.status);
             const responseId = saved.recordset[0].id;
-            await transaction.request().input('responseId', mssql_1.default.UniqueIdentifier, responseId).input('action', mssql_1.default.NVarChar(30), input.submit ? 'submitted' : 'draft_saved').input('snapshot', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify({ answers: input.answers, calculated: evaluation.calculated, recommendation: evaluation.recommendation, proposedDecision: input.proposedDecision, comments: input.comments })).input('userId', mssql_1.default.UniqueIdentifier, input.userId)
+            await transaction.request().input('responseId', mssql_1.default.UniqueIdentifier, responseId).input('action', mssql_1.default.NVarChar(30), corrected ? 'corrected' : input.submit ? 'submitted' : 'draft_saved').input('snapshot', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify({ answers: input.answers, calculated: evaluation.calculated, recommendation: evaluation.recommendation, proposedDecision: input.proposedDecision, comments: input.comments })).input('userId', mssql_1.default.UniqueIdentifier, input.userId)
                 .query('INSERT INTO dbo.assessment_response_history(response_id,action,snapshot_json,acted_by) VALUES(@responseId,@action,@snapshot,@userId)');
+            if (input.kind === 'evaluation' && !input.submit)
+                await transaction.request().input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId).query(`
+        UPDATE dbo.event_evaluator_assignments SET status='in_progress',updated_at=SYSUTCDATETIME()
+        WHERE id=@assignmentId AND status='pending';
+      `);
             if (input.kind === 'evaluation' && input.submit)
                 await transaction.request().input('assignmentId', mssql_1.default.UniqueIdentifier, input.assignmentId).input('answers', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify(input.answers)).input('comments', mssql_1.default.NVarChar(mssql_1.default.MAX), input.comments ?? null).query(`
         IF EXISTS(SELECT 1 FROM dbo.event_evaluations WHERE assignment_id=@assignmentId) UPDATE dbo.event_evaluations SET answers_json=@answers,comments=@comments,updated_at=SYSUTCDATETIME() WHERE assignment_id=@assignmentId;
         ELSE INSERT INTO dbo.event_evaluations(assignment_id,answers_json,comments) VALUES(@assignmentId,@answers,@comments);
-        UPDATE dbo.event_evaluator_assignments SET status='submitted',updated_at=SYSUTCDATETIME() WHERE id=@assignmentId;
+        UPDATE dbo.event_evaluator_assignments SET status='submitted',updated_at=SYSUTCDATETIME()
+        WHERE id=@assignmentId AND status IN ('pending','in_progress','returned_to_evaluator');
+        IF @@ROWCOUNT=0 THROW 51000, 'EVALUATION_NOT_SUBMITTABLE', 1;
       `);
             if (input.kind === 'review' && input.submit) {
                 const finalScore = (0, assessment_engine_1.assessmentFinalScore)(workspace.definition, evaluation);

@@ -14,6 +14,7 @@ exports.loginSchema = zod_1.z.object({
 });
 exports.forgotPasswordSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
+    returnTo: zod_1.z.string().max(2000).optional(),
 });
 exports.resetPasswordSchema = zod_1.z.object({
     token: zod_1.z.string().min(32).max(256),

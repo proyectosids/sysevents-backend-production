@@ -11,6 +11,7 @@ export declare const loginSchema: z.ZodObject<{
 }, z.core.$strip>;
 export declare const forgotPasswordSchema: z.ZodObject<{
     email: z.ZodString;
+    returnTo: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export declare const resetPasswordSchema: z.ZodObject<{
     token: z.ZodString;
