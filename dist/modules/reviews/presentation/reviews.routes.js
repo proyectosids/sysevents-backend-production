@@ -246,6 +246,9 @@ exports.reviewsRouter.get('/reviews/:id/audit-files/:fileId', authenticate_middl
     const file = await filesRepository.findById(fileId);
     if (!file)
         throw new app_error_1.AppError('File not found', 404, 'FILE_NOT_FOUND');
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', String(file.sizeBytes));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.originalName)}`);
     return res.sendFile(fileStorageService.getAbsolutePath(file.storagePath));
 }));
@@ -258,6 +261,9 @@ exports.reviewsRouter.get('/reviews/:id/files/:fileId', authenticate_middleware_
     const file = await filesRepository.findById(fileId);
     if (!file)
         throw new app_error_1.AppError('File not found', 404, 'FILE_NOT_FOUND');
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', String(file.sizeBytes));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.originalName)}`);
     return res.sendFile(fileStorageService.getAbsolutePath(file.storagePath));
 }));
