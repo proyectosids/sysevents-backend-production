@@ -4,9 +4,31 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TenantsRepository = void 0;
+exports.deriveTenantUserStatuses = deriveTenantUserStatuses;
 const mssql_1 = __importDefault(require("mssql"));
 const database_1 = require("../../../../config/database");
 const slug_1 = require("../../../../shared/utils/slug");
+function deriveTenantUserStatuses(userStatus, invitationExpiresAt, invitationAcceptedAt, now = new Date()) {
+    const accountStatus = userStatus === 'active' ? 'active' : 'inactive';
+    const invitationStatus = !invitationExpiresAt
+        ? null
+        : invitationAcceptedAt
+            ? 'accepted'
+            : invitationExpiresAt <= now
+                ? 'expired'
+                : 'pending';
+    return {
+        accountStatus,
+        invitationStatus,
+        // Conserva compatibilidad con clientes anteriores sin confundir una invitación
+        // vencida con una cuenta que ya se encuentra activa.
+        accessStatus: accountStatus === 'active'
+            ? 'active'
+            : invitationStatus === 'expired'
+                ? 'expired'
+                : 'pending',
+    };
+}
 function mapTenant(row) {
     return {
         id: row.id,
@@ -18,18 +40,14 @@ function mapTenant(row) {
     };
 }
 function mapTenantUser(row) {
-    const accessStatus = row.invitation_accepted_at || (row.user_status === 'active' && !row.invitation_expires_at)
-        ? 'active'
-        : row.invitation_expires_at && row.invitation_expires_at <= new Date()
-            ? 'expired'
-            : 'pending';
+    const statuses = deriveTenantUserStatuses(row.user_status, row.invitation_expires_at, row.invitation_accepted_at);
     return {
         tenantId: row.tenant_id,
         userId: row.user_id,
         tenantRole: row.tenant_role,
         academicRoles: JSON.parse(row.academic_roles_json || '[]').map((item) => item.academicRole),
         createdAt: row.created_at,
-        accessStatus,
+        ...statuses,
         user: {
             id: row.user_id,
             email: row.email,

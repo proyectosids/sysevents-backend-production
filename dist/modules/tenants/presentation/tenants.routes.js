@@ -177,14 +177,16 @@ exports.tenantsRouter.post('/:id/users', (0, require_permission_middleware_1.req
     });
     await tenantsRepository.replaceAcademicRoles(id, user.id, input.academicRoles);
     await syncTenantRoles(user.id);
-    const invitation = await sendTenantInvitation({
-        tenantId: id,
-        tenantName: tenant.name,
-        userId: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        createdBy: req.user.id,
-    });
+    const invitation = user.status === 'active'
+        ? null
+        : await sendTenantInvitation({
+            tenantId: id,
+            tenantName: tenant.name,
+            userId: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            createdBy: req.user.id,
+        });
     return (0, api_response_1.sendSuccess)(res, 'User assigned to tenant successfully', {
         user,
         userCreated,
@@ -262,6 +264,9 @@ exports.tenantsRouter.post('/:id/users/:userId/resend-invitation', (0, require_p
     const user = await iamRepository.findUserById(userId);
     if (!tenant || !membership || !user) {
         throw new app_error_1.AppError('Tenant user not found', 404, 'TENANT_USER_NOT_FOUND');
+    }
+    if (user.status === 'active') {
+        throw new app_error_1.AppError('La cuenta ya está activa y no requiere otra invitación.', 409, 'TENANT_USER_ALREADY_ACTIVE');
     }
     const invitation = await sendTenantInvitation({
         tenantId: id,

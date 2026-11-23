@@ -11,6 +11,10 @@ function sendSuccess(res, message, data, statusCode = 200) {
 }
 function sendError(res, message, errorCode, statusCode, details) {
     const body = { success: false, message, errorCode };
+    const requestId = res.locals.requestId;
+    if (typeof requestId === 'string') {
+        body.requestId = requestId;
+    }
     if (details !== undefined) {
         body.details = details;
     }

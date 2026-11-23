@@ -35,6 +35,7 @@ const translations_routes_1 = require("./modules/translations/presentation/trans
 const submissions_routes_1 = require("./modules/submissions/presentation/submissions.routes");
 const error_handler_middleware_1 = require("./shared/middlewares/error-handler.middleware");
 const not_found_middleware_1 = require("./shared/middlewares/not-found.middleware");
+const request_id_middleware_1 = require("./shared/middlewares/request-id.middleware");
 const sanitize_middleware_1 = require("./shared/middlewares/sanitize.middleware");
 const api_response_1 = require("./shared/utils/api-response");
 const corsOrigins = env_1.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
@@ -43,9 +44,11 @@ function createApp() {
     // CapRover forwards requests through a single reverse proxy. Trust that hop so
     // Express and express-rate-limit use the original client IP from X-Forwarded-For.
     app.set('trust proxy', 1);
+    app.use(request_id_middleware_1.requestIdMiddleware);
     app.use((0, cors_1.default)({
         origin: corsOrigins.length > 1 ? corsOrigins : corsOrigins[0],
         credentials: true,
+        exposedHeaders: ['X-Request-ID'],
     }));
     app.use(rate_limiters_1.globalRateLimiter);
     app.use('/api/payments/stripe/webhook', express_1.default.raw({ type: 'application/json' }));

@@ -64,8 +64,8 @@ export declare const updateReviewFileCommentSchema: z.ZodObject<{
 }, z.core.$strip>;
 export declare const finalDecisionSchema: z.ZodObject<{
     decision: z.ZodEnum<{
-        changes_requested: "changes_requested";
         accepted: "accepted";
+        changes_requested: "changes_requested";
         rejected: "rejected";
         accepted_with_observations: "accepted_with_observations";
         requires_corrections: "requires_corrections";

@@ -1,5 +1,12 @@
 import sql from 'mssql';
 import { Tenant, TenantStatus, TenantUser } from '../../domain/entities/tenant';
+export type TenantAccountStatus = 'active' | 'inactive';
+export type TenantInvitationStatus = 'accepted' | 'pending' | 'expired' | null;
+export declare function deriveTenantUserStatuses(userStatus: string, invitationExpiresAt: Date | null, invitationAcceptedAt: Date | null, now?: Date): {
+    accountStatus: TenantAccountStatus;
+    invitationStatus: TenantInvitationStatus;
+    accessStatus: "active" | "pending" | "expired";
+};
 export declare class TenantsRepository {
     listTenants(): Promise<Tenant[]>;
     listTenantsForUser(userId: string): Promise<Tenant[]>;
@@ -35,6 +42,8 @@ export declare class TenantsRepository {
             firstName: string;
             lastName: string;
         };
+        accountStatus: TenantAccountStatus;
+        invitationStatus: TenantInvitationStatus;
         accessStatus: "active" | "pending" | "expired";
     })[]>;
     countTenantUsers(tenantId: string): Promise<number>;

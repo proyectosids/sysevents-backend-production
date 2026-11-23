@@ -6,7 +6,7 @@ const env_1 = require("../../config/env");
 const app_error_1 = require("../errors/app-error");
 const logger_1 = require("../logger/logger");
 const api_response_1 = require("../utils/api-response");
-function errorHandlerMiddleware(error, _req, res, _next) {
+function errorHandlerMiddleware(error, req, res, _next) {
     if (error instanceof app_error_1.AppError) {
         return (0, api_response_1.sendError)(res, error.message, error.errorCode, error.statusCode, error.details);
     }
@@ -14,6 +14,12 @@ function errorHandlerMiddleware(error, _req, res, _next) {
         return (0, api_response_1.sendError)(res, 'Validation error', 'VALIDATION_ERROR', 400, error.flatten().fieldErrors);
     }
     logger_1.logger.error('Unhandled application error', {
+        requestId: res.locals.requestId,
+        method: req.method,
+        path: req.originalUrl,
+        userId: req.user?.id,
+        eventId: req.params.eventId,
+        registrationId: req.params.id,
         error: error instanceof Error ? error.message : String(error),
         stack: env_1.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined,
     });
