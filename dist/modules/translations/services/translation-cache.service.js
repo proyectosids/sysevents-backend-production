@@ -59,11 +59,26 @@ async function translateWithGoogle(text, targetLanguage) {
         dt: 't',
         q: text,
     });
-    const response = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`);
-    if (!response.ok)
-        return text;
-    const payload = await response.json();
-    return payload[0]?.map((segment) => segment[0]).join('') || text;
+    let lastError;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+            const response = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`, {
+                signal: AbortSignal.timeout(8_000),
+                headers: { 'User-Agent': 'SysEvents/1.0' },
+            });
+            if (!response.ok)
+                throw new Error(`Translation provider returned ${response.status}`);
+            const payload = await response.json();
+            const translated = payload[0]?.map((segment) => segment[0]).join('').trim();
+            if (!translated)
+                throw new Error('Translation provider returned an empty response');
+            return translated;
+        }
+        catch (error) {
+            lastError = error;
+        }
+    }
+    throw lastError instanceof Error ? lastError : new Error('Translation provider unavailable');
 }
 async function translateConcurrently(texts, targetLanguage, concurrency = 6) {
     const translations = new Map();
@@ -83,13 +98,22 @@ class TranslationCacheService {
         const cache = await readJson(filePath);
         const uniqueTexts = [...new Set(texts.map(normalizeText).filter(isTranslatableText))];
         let changed = false;
-        const missingTexts = uniqueTexts.filter((text) => !cache[text]);
+        const missingTexts = uniqueTexts.filter((text) => !cache[text] || normalizeText(cache[text]) === text);
         if (missingTexts.length) {
             const translations = await translateConcurrently(missingTexts, targetLanguage);
             translations.forEach((translated, text) => {
-                cache[text] = translated;
+                // Do not poison the target-language cache with the Spanish source when
+                // the upstream provider gives no effective translation.
+                if (normalizeText(translated) !== text) {
+                    if (cache[text] !== translated)
+                        changed = true;
+                    cache[text] = translated;
+                }
+                else if (cache[text]) {
+                    delete cache[text];
+                    changed = true;
+                }
             });
-            changed = true;
         }
         if (changed) {
             await writeJson(filePath, cache);
