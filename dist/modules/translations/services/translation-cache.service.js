@@ -60,14 +60,18 @@ async function translateWithGoogle(text, targetLanguage) {
         q: text,
     });
     let lastError;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
         try {
             const response = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`, {
-                signal: AbortSignal.timeout(8_000),
+                signal: AbortSignal.timeout(15_000),
                 headers: { 'User-Agent': 'SysEvents/1.0' },
             });
-            if (!response.ok)
-                throw new Error(`Translation provider returned ${response.status}`);
+            if (!response.ok) {
+                const error = new Error(`Translation provider returned ${response.status}`);
+                if (response.status < 500 && response.status !== 429)
+                    throw error;
+                throw error;
+            }
             const payload = await response.json();
             const translated = payload[0]?.map((segment) => segment[0]).join('').trim();
             if (!translated)
@@ -76,11 +80,14 @@ async function translateWithGoogle(text, targetLanguage) {
         }
         catch (error) {
             lastError = error;
+            if (attempt < 3) {
+                await new Promise((resolve) => setTimeout(resolve, 350 * (2 ** attempt)));
+            }
         }
     }
     throw lastError instanceof Error ? lastError : new Error('Translation provider unavailable');
 }
-async function translateConcurrently(texts, targetLanguage, concurrency = 6) {
+async function translateConcurrently(texts, targetLanguage, concurrency = 2) {
     const translations = new Map();
     let nextIndex = 0;
     const workers = Array.from({ length: Math.min(concurrency, texts.length) }, async () => {
