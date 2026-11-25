@@ -416,6 +416,9 @@ class TenantsRepository {
             .request()
             .input('tenantId', mssql_1.default.UniqueIdentifier, input.tenantId)
             .input('userId', mssql_1.default.UniqueIdentifier, input.userId)
+            .input('eventId', mssql_1.default.UniqueIdentifier, input.eventId ?? null)
+            .input('tenantRole', mssql_1.default.NVarChar(30), input.tenantRole)
+            .input('academicRolesJson', mssql_1.default.NVarChar(mssql_1.default.MAX), JSON.stringify(input.academicRoles.map((academicRole) => ({ academicRole }))))
             .input('tokenHash', mssql_1.default.NVarChar(128), input.tokenHash)
             .input('expiresAt', mssql_1.default.DateTime2, input.expiresAt)
             .input('createdBy', mssql_1.default.UniqueIdentifier, input.createdBy ?? null)
@@ -428,10 +431,12 @@ class TenantsRepository {
           AND revoked_at IS NULL;
 
         INSERT INTO dbo.tenant_invitations (
-          tenant_id, user_id, token_hash, expires_at, created_by
+          tenant_id, user_id, event_id, tenant_role, academic_roles_json,
+          token_hash, expires_at, created_by
         )
         VALUES (
-          @tenantId, @userId, @tokenHash, @expiresAt, @createdBy
+          @tenantId, @userId, @eventId, @tenantRole, @academicRolesJson,
+          @tokenHash, @expiresAt, @createdBy
         );
       `);
     }
@@ -449,7 +454,11 @@ class TenantsRepository {
           users.email,
           users.first_name,
           users.last_name,
-          membership.tenant_role,
+          users.status AS user_status,
+          COALESCE(invitation.tenant_role, membership.tenant_role) AS tenant_role,
+          COALESCE(invitation.academic_roles_json, '[]') AS academic_roles_json,
+          invitation.event_id,
+          event.name AS event_name,
           invitation.expires_at,
           invitation.accepted_at,
           invitation.revoked_at
@@ -459,6 +468,7 @@ class TenantsRepository {
         INNER JOIN dbo.tenant_users membership
           ON membership.tenant_id = invitation.tenant_id
          AND membership.user_id = invitation.user_id
+        LEFT JOIN dbo.events event ON event.id = invitation.event_id AND event.deleted_at IS NULL
         WHERE invitation.token_hash = @tokenHash
       `);
         const row = result.recordset[0];
@@ -472,7 +482,11 @@ class TenantsRepository {
             email: row.email,
             firstName: row.first_name,
             lastName: row.last_name,
+            accountStatus: row.user_status === 'active' ? 'active' : 'inactive',
             tenantRole: row.tenant_role,
+            academicRoles: JSON.parse(row.academic_roles_json || '[]').map((item) => (typeof item === 'string' ? item : item.academicRole ?? item.academic_role)).filter((item) => Boolean(item)),
+            eventId: row.event_id,
+            eventName: row.event_name,
             expiresAt: row.expires_at,
             acceptedAt: row.accepted_at,
             revokedAt: row.revoked_at,
@@ -484,6 +498,38 @@ class TenantsRepository {
             .request()
             .input('id', mssql_1.default.UniqueIdentifier, id)
             .query(`
+        UPDATE membership
+        SET tenant_role = COALESCE(invitation.tenant_role, membership.tenant_role)
+        FROM dbo.tenant_users membership
+        INNER JOIN dbo.tenant_invitations invitation
+          ON invitation.tenant_id = membership.tenant_id
+         AND invitation.user_id = membership.user_id
+        WHERE invitation.id = @id;
+
+        DELETE profile
+        FROM dbo.tenant_user_academic_roles profile
+        INNER JOIN dbo.tenant_invitations invitation
+          ON invitation.tenant_id = profile.tenant_id
+         AND invitation.user_id = profile.user_id
+        WHERE invitation.id = @id
+          AND invitation.academic_roles_json IS NOT NULL;
+
+        INSERT INTO dbo.tenant_user_academic_roles (tenant_id, user_id, academic_role)
+        SELECT invitation.tenant_id, invitation.user_id, role.academic_role
+        FROM dbo.tenant_invitations invitation
+        CROSS APPLY OPENJSON(COALESCE(invitation.academic_roles_json, '[]')) selected
+        CROSS APPLY (
+          SELECT CASE
+            WHEN selected.type = 5 THEN COALESCE(
+              JSON_VALUE(selected.value, '$.academicRole'),
+              JSON_VALUE(selected.value, '$.academic_role')
+            )
+            ELSE selected.value
+          END AS academic_role
+        ) role
+        WHERE invitation.id = @id
+          AND role.academic_role IN ('supervisor', 'leader', 'reviewer', 'evaluator');
+
         UPDATE dbo.tenant_invitations
         SET accepted_at = SYSUTCDATETIME()
         WHERE id = @id

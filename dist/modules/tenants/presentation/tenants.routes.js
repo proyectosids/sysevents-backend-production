@@ -19,6 +19,7 @@ const authenticate_middleware_1 = require("../../iam/presentation/middlewares/au
 const require_permission_middleware_1 = require("../../iam/presentation/middlewares/require-permission.middleware");
 const saas_repository_1 = require("../../saas/infrastructure/repositories/saas.repository");
 const tenants_repository_1 = require("../infrastructure/repositories/tenants.repository");
+const sync_tenant_roles_1 = require("../application/sync-tenant-roles");
 const tenant_schemas_1 = require("./schemas/tenant.schemas");
 exports.tenantsRouter = (0, express_1.Router)();
 const tenantsRepository = new tenants_repository_1.TenantsRepository();
@@ -32,43 +33,21 @@ function hashToken(token) {
 function consumesAdminSeat(tenantRole) {
     return tenantRole === 'owner' || tenantRole === 'admin';
 }
-async function syncTenantRoles(userId) {
-    await iamRepository.removeRolesFromUserByNames(userId, [
-        'tenant_owner',
-        'academic_reviewer',
-        'event_supervisor',
-        'review_team_leader',
-        'event_evaluator',
-        'program_leader',
-    ]);
-    if (await tenantsRepository.userHasTenantRole(userId, ['owner', 'admin'])) {
-        await iamRepository.assignRoleToUserByName(userId, 'tenant_owner');
-    }
-    const scopedRoles = await Promise.all([
-        tenantsRepository.userHasScopedAcademicRole(userId, 'supervisor'),
-        tenantsRepository.userHasScopedAcademicRole(userId, 'leader'),
-        tenantsRepository.userHasScopedAcademicRole(userId, 'reviewer'),
-        tenantsRepository.userHasScopedAcademicRole(userId, 'evaluator'),
-    ]);
-    const workspaceRoles = ['event_supervisor', 'review_team_leader', 'academic_reviewer', 'event_evaluator'];
-    for (let index = 0; index < scopedRoles.length; index += 1) {
-        if (scopedRoles[index]) {
-            await iamRepository.assignRoleToUserByName(userId, workspaceRoles[index]);
-        }
-    }
-}
 async function sendTenantInvitation(input) {
     const token = crypto_1.default.randomBytes(48).toString('hex');
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const event = await eventsRepository.findCurrentEventByTenant(input.tenantId);
     await tenantsRepository.createInvitation({
         tenantId: input.tenantId,
         userId: input.userId,
+        eventId: event?.id ?? null,
+        tenantRole: input.tenantRole,
+        academicRoles: input.academicRoles,
         tokenHash: hashToken(token),
         expiresAt,
         createdBy: input.createdBy,
     });
     const invitationUrl = `${env_1.env.APP_PUBLIC_URL.replace(/\/$/, '')}/accept-invitation?token=${encodeURIComponent(token)}`;
-    const event = await eventsRepository.findCurrentEventByTenant(input.tenantId);
     const eventName = event?.name ?? 'evento activo';
     const delivery = await emailService.sendTemplate('tenant_invitation', input.email, {
         name: input.firstName,
@@ -176,17 +155,17 @@ exports.tenantsRouter.post('/:id/users', (0, require_permission_middleware_1.req
         tenantRole: input.tenantRole,
     });
     await tenantsRepository.replaceAcademicRoles(id, user.id, input.academicRoles);
-    await syncTenantRoles(user.id);
-    const invitation = user.status === 'active'
-        ? null
-        : await sendTenantInvitation({
-            tenantId: id,
-            tenantName: tenant.name,
-            userId: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            createdBy: req.user.id,
-        });
+    await (0, sync_tenant_roles_1.syncTenantRoles)(user.id);
+    const invitation = await sendTenantInvitation({
+        tenantId: id,
+        tenantName: tenant.name,
+        userId: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        tenantRole: input.tenantRole,
+        academicRoles: input.academicRoles,
+        createdBy: req.user.id,
+    });
     return (0, api_response_1.sendSuccess)(res, 'User assigned to tenant successfully', {
         user,
         userCreated,
@@ -220,7 +199,7 @@ exports.tenantsRouter.patch('/:id/users/:userId', (0, require_permission_middlew
     if (input.academicRoles) {
         await tenantsRepository.replaceAcademicRoles(id, userId, input.academicRoles);
     }
-    await syncTenantRoles(userId);
+    await (0, sync_tenant_roles_1.syncTenantRoles)(userId);
     return (0, api_response_1.sendSuccess)(res, 'Tenant user role updated successfully');
 }));
 exports.tenantsRouter.patch('/:id/users/:userId/profile', (0, require_permission_middleware_1.requirePermission)('tenants.manage_users'), (0, async_handler_1.asyncHandler)(async (req, res) => {
@@ -254,7 +233,7 @@ exports.tenantsRouter.delete('/:id/users/:userId', (0, require_permission_middle
         throw new app_error_1.AppError('Reasigna o retira primero las responsabilidades académicas activas de esta persona.', 409, 'TENANT_USER_HAS_ACADEMIC_RESPONSIBILITIES', { responsibilities: activeResponsibilities });
     }
     await tenantsRepository.removeUserFromTenant(id, userId);
-    await syncTenantRoles(userId);
+    await (0, sync_tenant_roles_1.syncTenantRoles)(userId);
     return (0, api_response_1.sendSuccess)(res, 'Tenant user removed successfully');
 }));
 exports.tenantsRouter.post('/:id/users/:userId/resend-invitation', (0, require_permission_middleware_1.requirePermission)('tenants.manage_users'), (0, async_handler_1.asyncHandler)(async (req, res) => {
@@ -265,8 +244,9 @@ exports.tenantsRouter.post('/:id/users/:userId/resend-invitation', (0, require_p
     if (!tenant || !membership || !user) {
         throw new app_error_1.AppError('Tenant user not found', 404, 'TENANT_USER_NOT_FOUND');
     }
-    if (user.status === 'active') {
-        throw new app_error_1.AppError('La cuenta ya está activa y no requiere otra invitación.', 409, 'TENANT_USER_ALREADY_ACTIVE');
+    const tenantUser = (await tenantsRepository.listTenantUsers(id)).find((item) => item.userId === userId);
+    if (!tenantUser) {
+        throw new app_error_1.AppError('Tenant user not found', 404, 'TENANT_USER_NOT_FOUND');
     }
     const invitation = await sendTenantInvitation({
         tenantId: id,
@@ -274,6 +254,8 @@ exports.tenantsRouter.post('/:id/users/:userId/resend-invitation', (0, require_p
         userId,
         email: user.email,
         firstName: user.firstName,
+        tenantRole: tenantUser.tenantRole,
+        academicRoles: tenantUser.academicRoles ?? [],
         createdBy: req.user.id,
     });
     return (0, api_response_1.sendSuccess)(res, 'Tenant invitation sent successfully', invitation);

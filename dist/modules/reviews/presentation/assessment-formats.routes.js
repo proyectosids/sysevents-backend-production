@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessmentFormatsRouter = void 0;
 const express_1 = require("express");
+const env_1 = require("../../../config/env");
 const app_error_1 = require("../../../shared/errors/app-error");
 const api_response_1 = require("../../../shared/utils/api-response");
 const async_handler_1 = require("../../../shared/utils/async-handler");
@@ -46,6 +47,7 @@ const assessment_formats_repository_1 = require("../infrastructure/repositories/
 const academic_scope_policy_1 = require("../domain/academic-scope-policy");
 const assessment_schemas_1 = require("./schemas/assessment.schemas");
 exports.assessmentFormatsRouter = (0, express_1.Router)();
+const appPublicUrl = env_1.env.APP_PUBLIC_URL.replace(/\/$/, '');
 const repository = new assessment_formats_repository_1.AssessmentFormatsRepository();
 const workflowRepository = new academic_workflow_repository_1.AcademicWorkflowRepository();
 const emailService = new email_service_1.EmailService();
@@ -148,7 +150,10 @@ const saveResponse = (submit) => (0, async_handler_1.asyncHandler)(async (req, r
         const notification = await workflowRepository.assignmentNotificationData(assignmentId);
         if (notification?.leaderEmail) {
             await communicationsRepository.createNotification({ userId: notification.leaderUserId, recipientEmail: notification.leaderEmail, type: 'review_completed', title: 'Revisión lista para verificar', message: `La revisión de ${notification.submissionTitle} fue enviada para tu verificación.` });
-            await emailService.sendTemplate('review_completed', notification.leaderEmail, { submissionTitle: notification.submissionTitle });
+            await emailService.sendTemplate('review_completed', notification.leaderEmail, {
+                submissionTitle: notification.submissionTitle,
+                actionUrl: `${appPublicUrl}/app/me/reviews?reviewId=${assignmentId}`,
+            });
         }
     }
     return (0, api_response_1.sendSuccess)(res, submit ? 'Evaluación enviada.' : 'Borrador guardado.', result);

@@ -63,5 +63,11 @@ export declare const invitationTokenParamsSchema: z.ZodObject<{
     token: z.ZodString;
 }, z.core.$strip>;
 export declare const acceptTenantInvitationSchema: z.ZodObject<{
+    email: z.ZodString;
+}, z.core.$strip>;
+export declare const completeTenantInvitationRegistrationSchema: z.ZodObject<{
+    email: z.ZodString;
+    firstName: z.ZodString;
+    lastName: z.ZodString;
     password: z.ZodString;
 }, z.core.$strip>;

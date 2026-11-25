@@ -8,9 +8,7 @@ const nodemailer_1 = __importDefault(require("nodemailer"));
 const env_1 = require("../../../../config/env");
 const logger_1 = require("../../../../shared/logger/logger");
 const communications_repository_1 = require("../../infrastructure/repositories/communications.repository");
-function renderTemplate(template, variables) {
-    return template.replace(/\{\{(\w+)\}\}/g, (_match, key) => variables[key] ?? '');
-}
+const email_template_renderer_1 = require("./email-template-renderer");
 function optionalEnv(value) {
     const trimmed = value?.trim();
     return trimmed ? trimmed : undefined;
@@ -35,8 +33,8 @@ class EmailService {
         if (!template || !template.isActive) {
             return { status: 'skipped', reason: 'Email template is not active' };
         }
-        const subject = renderTemplate(template.subject, variables);
-        const body = renderTemplate(template.body, variables);
+        const subject = (0, email_template_renderer_1.renderTemplateText)(template.subject, variables);
+        const content = (0, email_template_renderer_1.renderBrandedEmail)({ templateKey, subject, body: template.body, variables });
         const logId = await this.communicationsRepository.createEmailLog({
             templateKey,
             recipientEmail,
@@ -60,10 +58,14 @@ class EmailService {
                     : undefined,
             });
             await transporter.sendMail({
-                from: smtp.from,
+                from: {
+                    name: 'Sistema SysEvents',
+                    address: smtp.from,
+                },
                 to: recipientEmail,
                 subject,
-                text: body,
+                text: content.text,
+                html: content.html,
             });
             await this.communicationsRepository.updateEmailLog(logId, 'sent');
             return { status: 'sent' };

@@ -56,6 +56,9 @@ export declare class TenantsRepository {
     createInvitation(input: {
         tenantId: string;
         userId: string;
+        eventId?: string | null;
+        tenantRole: string;
+        academicRoles: string[];
         tokenHash: string;
         expiresAt: Date;
         createdBy?: string | null;
@@ -68,7 +71,11 @@ export declare class TenantsRepository {
         email: string;
         firstName: string;
         lastName: string;
+        accountStatus: "active" | "inactive";
         tenantRole: string;
+        academicRoles: any;
+        eventId: string | null;
+        eventName: string | null;
         expiresAt: Date;
         acceptedAt: Date | null;
         revokedAt: Date | null;

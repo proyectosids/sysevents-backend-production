@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.acceptTenantInvitationSchema = exports.invitationTokenParamsSchema = exports.updateTenantUserProfileSchema = exports.updateTenantUserSchema = exports.tenantUserParamsSchema = exports.addTenantUserSchema = exports.updateTenantSchema = exports.createTenantSchema = exports.tenantIdParamsSchema = void 0;
+exports.completeTenantInvitationRegistrationSchema = exports.acceptTenantInvitationSchema = exports.invitationTokenParamsSchema = exports.updateTenantUserProfileSchema = exports.updateTenantUserSchema = exports.tenantUserParamsSchema = exports.addTenantUserSchema = exports.updateTenantSchema = exports.createTenantSchema = exports.tenantIdParamsSchema = void 0;
 const zod_1 = require("zod");
 const academicRoleSchema = zod_1.z.enum(['supervisor', 'leader', 'reviewer', 'evaluator']);
 exports.tenantIdParamsSchema = zod_1.z.object({
@@ -42,6 +42,12 @@ exports.invitationTokenParamsSchema = zod_1.z.object({
     token: zod_1.z.string().min(32).max(256),
 });
 exports.acceptTenantInvitationSchema = zod_1.z.object({
+    email: zod_1.z.string().email(),
+});
+exports.completeTenantInvitationRegistrationSchema = zod_1.z.object({
+    email: zod_1.z.string().email(),
+    firstName: zod_1.z.string().min(1).max(120),
+    lastName: zod_1.z.string().min(1).max(120),
     password: zod_1.z.string().min(8).max(100),
 });
 //# sourceMappingURL=tenant.schemas.js.map

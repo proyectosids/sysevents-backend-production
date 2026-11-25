@@ -128,7 +128,11 @@ exports.evaluationsRouter.post('/evaluator-assignments/:id/return', authenticate
     if (!assignment)
         throw new app_error_1.AppError('Asignación no encontrada.', 404, 'EVALUATION_ASSIGNMENT_NOT_FOUND');
     await evaluationsRepository.returnToEvaluator(id, reason, req.user.id);
-    await emailService.sendTemplate('evaluation_returned', assignment.evaluatorEmail, { submissionTitle: assignment.submissionTitle, reason });
+    await emailService.sendTemplate('evaluation_returned', assignment.evaluatorEmail, {
+        submissionTitle: assignment.submissionTitle,
+        reason,
+        actionUrl: `${env_1.env.APP_PUBLIC_URL.replace(/\/$/, '')}/app/me/reviews`,
+    });
     return (0, api_response_1.sendSuccess)(res, 'Evaluación devuelta al evaluador.');
 }));
 exports.evaluationsRouter.post('/evaluator-assignments/:id/release', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {
@@ -138,7 +142,10 @@ exports.evaluationsRouter.post('/evaluator-assignments/:id/release', authenticat
     if (!assignment)
         throw new app_error_1.AppError('Asignación no encontrada.', 404, 'EVALUATION_ASSIGNMENT_NOT_FOUND');
     await evaluationsRepository.release(id, notes ?? null, req.user.id);
-    await emailService.sendTemplate('evaluation_released', assignment.participantEmail, { submissionTitle: assignment.submissionTitle });
+    await emailService.sendTemplate('evaluation_released', assignment.participantEmail, {
+        submissionTitle: assignment.submissionTitle,
+        actionUrl: `${env_1.env.APP_PUBLIC_URL.replace(/\/$/, '')}/app/me/downloads`,
+    });
     return (0, api_response_1.sendSuccess)(res, 'Evaluación liberada al participante.');
 }));
 exports.evaluationsRouter.delete('/events/:eventId/evaluators/:userId', authenticate_middleware_1.authenticateMiddleware, (0, async_handler_1.asyncHandler)(async (req, res) => {

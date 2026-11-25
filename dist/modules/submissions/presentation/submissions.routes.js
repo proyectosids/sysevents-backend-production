@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.submissionTypesRouter = exports.mySubmissionsRouter = exports.submissionsRouter = void 0;
 const express_1 = require("express");
+const env_1 = require("../../../config/env");
 const app_error_1 = require("../../../shared/errors/app-error");
 const async_handler_1 = require("../../../shared/utils/async-handler");
 const api_response_1 = require("../../../shared/utils/api-response");
@@ -156,9 +157,11 @@ exports.submissionsRouter.post('/:id/submit', authenticate_middleware_1.authenti
     const submission = await submissionsRepository.submit(id, req.user.id);
     if (!submission)
         throw new app_error_1.AppError('Submission not found', 404, 'SUBMISSION_NOT_FOUND');
+    const event = await eventsRepository.findEventById(submission.eventId);
     await emailService.sendTemplate('submission_received', req.user.email, {
         submissionTitle: submission.title,
-        eventName: 'event',
+        eventName: event?.name ?? 'el evento',
+        actionUrl: `${env_1.env.APP_PUBLIC_URL.replace(/\/$/, '')}/app/me/submissions`,
     });
     return (0, api_response_1.sendSuccess)(res, 'Submission submitted successfully', submission);
 }));

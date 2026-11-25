@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.myReviewsRouter = exports.reviewsRouter = void 0;
 const express_1 = require("express");
+const env_1 = require("../../../config/env");
 const app_error_1 = require("../../../shared/errors/app-error");
 const async_handler_1 = require("../../../shared/utils/async-handler");
 const api_response_1 = require("../../../shared/utils/api-response");
@@ -19,6 +20,7 @@ const assessment_formats_repository_1 = require("../infrastructure/repositories/
 const review_schemas_1 = require("./schemas/review.schemas");
 exports.reviewsRouter = (0, express_1.Router)();
 exports.myReviewsRouter = (0, express_1.Router)();
+const appPublicUrl = env_1.env.APP_PUBLIC_URL.replace(/\/$/, '');
 const reviewsRepository = new reviews_repository_1.ReviewsRepository();
 const submissionsRepository = new submissions_repository_1.SubmissionsRepository();
 const emailService = new email_service_1.EmailService();
@@ -137,6 +139,8 @@ exports.reviewsRouter.post('/submissions/:id/assign-reviewer', authenticate_midd
     if (reviewer)
         await emailService.sendTemplate('review_assigned', reviewer.email, {
             submissionTitle: submission.title,
+            dueDate: input.dueAt ? new Date(input.dueAt).toLocaleDateString('es-MX', { dateStyle: 'long', timeZone: 'UTC' }) : '',
+            actionUrl: `${appPublicUrl}/app/me/reviews?reviewId=${assignment.id}`,
         });
     return (0, api_response_1.sendSuccess)(res, 'Reviewer assigned successfully', assignment, 201);
 }));
@@ -298,7 +302,10 @@ exports.reviewsRouter.post('/reviews/:id/submit', authenticate_middleware_1.auth
                 title: 'Revisión lista para verificar',
                 message: `La revisión de ${notification.submissionTitle} fue enviada para tu verificación.`,
             });
-            await emailService.sendTemplate('review_completed', notification.leaderEmail, { submissionTitle: notification.submissionTitle });
+            await emailService.sendTemplate('review_completed', notification.leaderEmail, {
+                submissionTitle: notification.submissionTitle,
+                actionUrl: `${appPublicUrl}/app/me/reviews?reviewId=${id}`,
+            });
         }
     }
     return (0, api_response_1.sendSuccess)(res, 'Review submitted successfully', review);
@@ -339,7 +346,11 @@ exports.reviewsRouter.post('/reviews/:id/return-to-reviewer', authenticate_middl
             title: 'Revisión devuelta para correcciones',
             message: `${notification.submissionTitle}: ${reason}`,
         });
-        await emailService.sendTemplate('review_returned', notification.reviewerEmail, { submissionTitle: notification.submissionTitle, reason });
+        await emailService.sendTemplate('review_returned', notification.reviewerEmail, {
+            submissionTitle: notification.submissionTitle,
+            reason,
+            actionUrl: `${appPublicUrl}/app/me/reviews?reviewId=${id}`,
+        });
     }
     return (0, api_response_1.sendSuccess)(res, 'Review returned to reviewer successfully');
 }));
@@ -372,7 +383,10 @@ exports.reviewsRouter.post('/reviews/:id/reminder', authenticate_middleware_1.au
         title: 'Revisión pendiente',
         message: `Tienes pendiente la revisión de ${notification.submissionTitle}.`,
     });
-    await emailService.sendTemplate('review_reminder', notification.reviewerEmail, { submissionTitle: notification.submissionTitle });
+    await emailService.sendTemplate('review_reminder', notification.reviewerEmail, {
+        submissionTitle: notification.submissionTitle,
+        actionUrl: `${appPublicUrl}/app/me/reviews?reviewId=${id}`,
+    });
     await academicWorkflowRepository.transitionReview({
         assignmentId: id,
         actorId: req.user.id,
@@ -408,7 +422,10 @@ exports.reviewsRouter.post('/submissions/:id/final-decision', authenticate_middl
             : 'changes_requested';
     const participant = await iamRepository.findUserById(submission.ownerUserId);
     if (participant)
-        await emailService.sendTemplate(emailTemplate, participant.email, { submissionTitle: submission.title });
+        await emailService.sendTemplate(emailTemplate, participant.email, {
+            submissionTitle: submission.title,
+            actionUrl: `${appPublicUrl}/app/me/submissions`,
+        });
     return (0, api_response_1.sendSuccess)(res, 'Final decision created successfully', decision, 201);
 }));
 //# sourceMappingURL=reviews.routes.js.map
