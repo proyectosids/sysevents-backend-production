@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TranslationCacheService = void 0;
 exports.translateWithGoogle = translateWithGoogle;
+exports.translateGroupWithGoogle = translateGroupWithGoogle;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const env_1 = require("../../../config/env");
@@ -42,15 +43,10 @@ async function readJson(filePath) {
     try {
         return JSON.parse(await fs_1.promises.readFile(filePath, 'utf8'));
     }
-    catch (error) {
-        if (error.code === 'ENOENT')
-            return {};
-        // A process interrupted during an older, non-atomic write can leave a
-        // truncated cache behind. Rebuild it instead of disabling translation for
-        // every visitor until the file is repaired manually.
-        if (error instanceof SyntaxError)
-            return {};
-        throw error;
+    catch {
+        // The cache is an optimization. A missing, truncated or temporarily
+        // unavailable file must never disable translation for the public site.
+        return {};
     }
 }
 async function writeJson(filePath, data) {
@@ -105,13 +101,86 @@ async function translateWithGoogle(text, targetLanguage) {
     }
     throw lastError instanceof Error ? lastError : new Error('Translation provider unavailable');
 }
-async function translateConcurrently(texts, targetLanguage, concurrency = 2) {
+function escapeHtml(value) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+function decodeHtml(value) {
+    const named = {
+        amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'",
+    };
+    return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code) => {
+        if (code.startsWith('#x'))
+            return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
+        if (code.startsWith('#'))
+            return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
+        return named[code.toLowerCase()] ?? entity;
+    });
+}
+async function translateGroupWithGoogle(texts, targetLanguage) {
+    const markup = texts
+        .map((text, index) => `<span data-sysevents-id="${index}">${escapeHtml(text)}</span>`)
+        .join('');
+    const translatedMarkup = await translateWithGoogle(markup, targetLanguage);
     const translations = new Map();
+    const pattern = /<span\s+data-sysevents-id=["'](\d+)["']>([\s\S]*?)<\/span>/gi;
+    let match = pattern.exec(translatedMarkup);
+    while (match) {
+        const index = Number(match[1]);
+        if (texts[index] !== undefined)
+            translations.set(texts[index], decodeHtml(match[2]).trim());
+        match = pattern.exec(translatedMarkup);
+    }
+    if (translations.size !== texts.length)
+        throw new Error('Translation provider changed batch markers');
+    return translations;
+}
+function groupByCharacterLimit(texts, characterLimit = 4_000) {
+    const groups = [];
+    let current = [];
+    let currentLength = 0;
+    texts.forEach((text) => {
+        const estimatedLength = text.length + 48;
+        if (current.length && currentLength + estimatedLength > characterLimit) {
+            groups.push(current);
+            current = [];
+            currentLength = 0;
+        }
+        current.push(text);
+        currentLength += estimatedLength;
+    });
+    if (current.length)
+        groups.push(current);
+    return groups;
+}
+async function translateGroupResilient(texts, targetLanguage) {
+    try {
+        return await translateGroupWithGoogle(texts, targetLanguage);
+    }
+    catch {
+        if (texts.length <= 1)
+            return new Map();
+        const middle = Math.ceil(texts.length / 2);
+        const [left, right] = await Promise.all([
+            translateGroupResilient(texts.slice(0, middle), targetLanguage),
+            translateGroupResilient(texts.slice(middle), targetLanguage),
+        ]);
+        return new Map([...left, ...right]);
+    }
+}
+async function translateConcurrently(texts, targetLanguage, concurrency = 4) {
+    const translations = new Map();
+    const groups = groupByCharacterLimit(texts);
     let nextIndex = 0;
-    const workers = Array.from({ length: Math.min(concurrency, texts.length) }, async () => {
-        while (nextIndex < texts.length) {
-            const text = texts[nextIndex++];
-            translations.set(text, await translateWithGoogle(text, targetLanguage));
+    const workers = Array.from({ length: Math.min(concurrency, groups.length) }, async () => {
+        while (nextIndex < groups.length) {
+            const group = groups[nextIndex++];
+            const resolved = await translateGroupResilient(group, targetLanguage);
+            resolved.forEach((translated, text) => translations.set(text, translated));
         }
     });
     await Promise.all(workers);
@@ -161,7 +230,9 @@ class TranslationCacheService {
             });
         }
         if (changed) {
-            await writeJson(filePath, cache);
+            // A read-only or temporarily unavailable volume must not turn a valid
+            // provider response into a 500. Translation still succeeds without cache.
+            await writeJson(filePath, cache).catch(() => undefined);
         }
         return uniqueTexts.reduce((result, text) => {
             result[text] = cache[text] ?? text;

@@ -8,11 +8,11 @@ const api_response_1 = require("../../../shared/utils/api-response");
 const translation_cache_service_1 = require("../services/translation-cache.service");
 exports.translateSchema = zod_1.z.object({
     targetLanguage: zod_1.z.enum(['en', 'fr', 'pt', 'de', 'it']),
-    texts: zod_1.z.array(zod_1.z.string().trim().min(1).max(10_000)).min(1).max(100),
+    texts: zod_1.z.array(zod_1.z.string().trim().min(1).max(10_000)).min(1).max(250),
 });
 exports.restoreSchema = zod_1.z.object({
     sourceLanguage: zod_1.z.enum(['en', 'fr', 'pt', 'de', 'it']),
-    texts: zod_1.z.array(zod_1.z.string().trim().min(1).max(10_000)).min(1).max(100),
+    texts: zod_1.z.array(zod_1.z.string().trim().min(1).max(10_000)).min(1).max(250),
 });
 const service = new translation_cache_service_1.TranslationCacheService();
 exports.translationsRouter = (0, express_1.Router)();
