@@ -9,7 +9,12 @@ exports.translateGroupWithGoogle = translateGroupWithGoogle;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const env_1 = require("../../../config/env");
+const logger_1 = require("../../../shared/logger/logger");
 const TRANSLATION_CACHE_DIR = path_1.default.resolve(env_1.env.FILE_STORAGE_PATH, 'i18n-cache');
+const GOOGLE_TRANSLATION_ENDPOINTS = [
+    'https://translate.googleapis.com/translate_a/single',
+    'https://translate.google.com/translate_a/single',
+];
 function normalizeText(value) {
     return value.replace(/\s+/g, ' ').trim();
 }
@@ -69,22 +74,19 @@ async function translateWithGoogle(text, targetLanguage) {
         q: text,
     });
     let lastError;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (const endpoint of GOOGLE_TRANSLATION_ENDPOINTS) {
         try {
-            const response = await fetch('https://translate.googleapis.com/translate_a/single', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 body: params,
-                signal: AbortSignal.timeout(15_000),
+                signal: AbortSignal.timeout(5_000),
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                    'User-Agent': 'SysEvents/1.0',
+                    'User-Agent': 'Mozilla/5.0 (compatible; SysEvents/1.0; +https://eventos.ulv.edu.mx)',
                 },
             });
             if (!response.ok) {
-                const error = new Error(`Translation provider returned ${response.status}`);
-                if (response.status < 500 && response.status !== 429)
-                    throw error;
-                throw error;
+                throw new Error(`Translation provider returned ${response.status}`);
             }
             const payload = await response.json();
             const translated = payload[0]?.map((segment) => segment[0]).join('').trim();
@@ -94,9 +96,6 @@ async function translateWithGoogle(text, targetLanguage) {
         }
         catch (error) {
             lastError = error;
-            if (attempt < 3) {
-                await new Promise((resolve) => setTimeout(resolve, 350 * (2 ** attempt)));
-            }
         }
     }
     throw lastError instanceof Error ? lastError : new Error('Translation provider unavailable');
@@ -161,15 +160,14 @@ async function translateGroupResilient(texts, targetLanguage) {
     try {
         return await translateGroupWithGoogle(texts, targetLanguage);
     }
-    catch {
-        if (texts.length <= 1)
-            return new Map();
-        const middle = Math.ceil(texts.length / 2);
-        const [left, right] = await Promise.all([
-            translateGroupResilient(texts.slice(0, middle), targetLanguage),
-            translateGroupResilient(texts.slice(middle), targetLanguage),
-        ]);
-        return new Map([...left, ...right]);
+    catch (error) {
+        logger_1.logger.warn('Translation group could not be resolved', {
+            targetLanguage,
+            textCount: texts.length,
+            characterCount: texts.reduce((total, text) => total + text.length, 0),
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return new Map();
     }
 }
 async function translateConcurrently(texts, targetLanguage, concurrency = 4) {
