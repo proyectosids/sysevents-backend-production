@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TranslationCacheService = void 0;
+exports.translateWithGoogle = translateWithGoogle;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const env_1 = require("../../../config/env");
@@ -62,9 +63,14 @@ async function translateWithGoogle(text, targetLanguage) {
     let lastError;
     for (let attempt = 0; attempt < 4; attempt += 1) {
         try {
-            const response = await fetch(`https://translate.googleapis.com/translate_a/single?${params.toString()}`, {
+            const response = await fetch('https://translate.googleapis.com/translate_a/single', {
+                method: 'POST',
+                body: params,
                 signal: AbortSignal.timeout(15_000),
-                headers: { 'User-Agent': 'SysEvents/1.0' },
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'User-Agent': 'SysEvents/1.0',
+                },
             });
             if (!response.ok) {
                 const error = new Error(`Translation provider returned ${response.status}`);
