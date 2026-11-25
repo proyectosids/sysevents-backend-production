@@ -12,6 +12,71 @@ function translationSourceHash(text) {
     return (0, crypto_1.createHash)('sha256').update(text, 'utf8').digest('hex');
 }
 class EventTranslationRepository {
+    async getEventStats(eventId) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .query(`
+        SELECT
+          target_language,
+          COUNT(1) AS translation_count,
+          COALESCE(SUM(LEN(source_text)), 0) AS source_characters,
+          COALESCE(SUM(LEN(translated_text)), 0) AS translated_characters,
+          MAX(updated_at) AS last_updated_at
+        FROM dbo.event_site_translations
+        WHERE event_id = @eventId
+        GROUP BY target_language
+        ORDER BY target_language;
+      `);
+        return result.recordset.map((row) => ({
+            targetLanguage: row.target_language,
+            translationCount: row.translation_count,
+            sourceCharacters: row.source_characters,
+            translatedCharacters: row.translated_characters,
+            lastUpdatedAt: row.last_updated_at,
+        }));
+    }
+    async listEventTranslations(eventId, input) {
+        const pool = await (0, database_1.getSqlPool)();
+        const request = pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .input('targetLanguage', mssql_1.default.NVarChar(10), input.targetLanguage ?? null)
+            .input('limit', mssql_1.default.Int, input.limit)
+            .input('offset', mssql_1.default.Int, input.offset);
+        const count = await request.query(`
+      SELECT COUNT(1) AS total
+      FROM dbo.event_site_translations
+      WHERE event_id = @eventId
+        AND (@targetLanguage IS NULL OR target_language = @targetLanguage);
+    `);
+        const rows = await pool.request()
+            .input('eventId', mssql_1.default.UniqueIdentifier, eventId)
+            .input('targetLanguage', mssql_1.default.NVarChar(10), input.targetLanguage ?? null)
+            .input('limit', mssql_1.default.Int, input.limit)
+            .input('offset', mssql_1.default.Int, input.offset)
+            .query(`
+        SELECT id, source_language, target_language, source_text, translated_text,
+          provider, created_at, updated_at
+        FROM dbo.event_site_translations
+        WHERE event_id = @eventId
+          AND (@targetLanguage IS NULL OR target_language = @targetLanguage)
+        ORDER BY updated_at DESC, id DESC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+      `);
+        return {
+            total: count.recordset[0]?.total ?? 0,
+            items: rows.recordset.map((row) => ({
+                id: row.id,
+                sourceLanguage: row.source_language,
+                targetLanguage: row.target_language,
+                sourceText: row.source_text,
+                translatedText: row.translated_text,
+                provider: row.provider,
+                createdAt: row.created_at,
+                updatedAt: row.updated_at,
+            })),
+        };
+    }
     async findMany(eventId, targetLanguage) {
         const pool = await (0, database_1.getSqlPool)();
         const result = await pool.request()

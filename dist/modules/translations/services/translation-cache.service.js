@@ -13,6 +13,7 @@ const env_1 = require("../../../config/env");
 const logger_1 = require("../../../shared/logger/logger");
 const event_translation_repository_1 = require("../infrastructure/repositories/event-translation.repository");
 const translation_usage_repository_1 = require("../infrastructure/repositories/translation-usage.repository");
+const translation_month_1 = require("./translation-month");
 const TRANSLATION_CACHE_DIR = path_1.default.resolve(env_1.env.FILE_STORAGE_PATH, 'i18n-cache');
 const GOOGLE_CLOUD_TRANSLATION_ENDPOINT = 'https://translation.googleapis.com/language/translate/v2';
 function normalizeText(value) {
@@ -132,16 +133,6 @@ function groupByLimits(texts, characterLimit = 20_000, itemLimit = 100) {
         groups.push(current);
     return groups;
 }
-function currentUsageMonth() {
-    const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/Los_Angeles',
-        year: 'numeric',
-        month: '2-digit',
-    }).formatToParts(new Date());
-    const year = parts.find((part) => part.type === 'year')?.value;
-    const month = parts.find((part) => part.type === 'month')?.value;
-    return `${year}-${month}`;
-}
 class GoogleCloudTranslationProvider {
     usageRepository;
     options;
@@ -160,7 +151,7 @@ class GoogleCloudTranslationProvider {
         if (!this.options.apiKey)
             throw new Error('GOOGLE_CLOUD_TRANSLATION_API_KEY is not configured');
         for (const group of groupByLimits(texts)) {
-            const usageMonth = currentUsageMonth();
+            const usageMonth = (0, translation_month_1.currentTranslationUsageMonth)();
             const characterCount = group.reduce((total, text) => total + text.length, 0);
             const reserved = await this.usageRepository.reserveCharacters(usageMonth, characterCount, this.options.monthlyCharacterLimit);
             if (!reserved) {

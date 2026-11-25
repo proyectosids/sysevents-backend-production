@@ -7,6 +7,21 @@ exports.TranslationUsageRepository = void 0;
 const mssql_1 = __importDefault(require("mssql"));
 const database_1 = require("../../../../config/database");
 class TranslationUsageRepository {
+    async listUsageHistory(limit = 12) {
+        const pool = await (0, database_1.getSqlPool)();
+        const result = await pool.request()
+            .input('limit', mssql_1.default.Int, limit)
+            .query(`
+        SELECT TOP (@limit) usage_month, characters_used, updated_at
+        FROM dbo.translation_monthly_usage
+        ORDER BY usage_month DESC;
+      `);
+        return result.recordset.map((row) => ({
+            month: row.usage_month,
+            charactersUsed: row.characters_used,
+            updatedAt: row.updated_at,
+        }));
+    }
     async reserveCharacters(usageMonth, requestedCharacters, monthlyLimit) {
         if (requestedCharacters <= 0)
             return true;
