@@ -45,12 +45,24 @@ async function readJson(filePath) {
     catch (error) {
         if (error.code === 'ENOENT')
             return {};
+        // A process interrupted during an older, non-atomic write can leave a
+        // truncated cache behind. Rebuild it instead of disabling translation for
+        // every visitor until the file is repaired manually.
+        if (error instanceof SyntaxError)
+            return {};
         throw error;
     }
 }
 async function writeJson(filePath, data) {
     await fs_1.promises.mkdir(path_1.default.dirname(filePath), { recursive: true });
-    await fs_1.promises.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+    try {
+        await fs_1.promises.writeFile(temporaryPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+        await fs_1.promises.rename(temporaryPath, filePath);
+    }
+    finally {
+        await fs_1.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
 }
 async function translateWithGoogle(text, targetLanguage) {
     const params = new URLSearchParams({
@@ -106,7 +118,27 @@ async function translateConcurrently(texts, targetLanguage, concurrency = 2) {
     return translations;
 }
 class TranslationCacheService {
+    languageQueues = new Map();
     async translateMany(texts, targetLanguage) {
+        const previous = this.languageQueues.get(targetLanguage) ?? Promise.resolve();
+        let releaseQueue;
+        const current = new Promise((resolve) => {
+            releaseQueue = resolve;
+        });
+        const queued = previous.then(() => current);
+        this.languageQueues.set(targetLanguage, queued);
+        await previous;
+        try {
+            return await this.translateManyExclusive(texts, targetLanguage);
+        }
+        finally {
+            releaseQueue();
+            if (this.languageQueues.get(targetLanguage) === queued) {
+                this.languageQueues.delete(targetLanguage);
+            }
+        }
+    }
+    async translateManyExclusive(texts, targetLanguage) {
         const filePath = path_1.default.join(TRANSLATION_CACHE_DIR, `${targetLanguage}.json`);
         const cache = await readJson(filePath);
         const uniqueTexts = [...new Set(texts.map(normalizeText).filter(isTranslatableText))];
