@@ -56,6 +56,16 @@ const envSchema = zod_1.z.object({
     STRIPE_SECRET_KEY: zod_1.z.string().optional(),
     STRIPE_WEBHOOK_SECRET: zod_1.z.string().optional(),
     MERCADOPAGO_ACCESS_TOKEN: zod_1.z.string().optional(),
+    GOOGLE_CLOUD_TRANSLATION_API_KEY: zod_1.z.preprocess((value) => typeof value === 'string' && value.trim() === '' ? undefined : value, zod_1.z.string().min(10).optional()),
+    GOOGLE_CLOUD_TRANSLATION_ENABLED: zod_1.z.preprocess((value) => typeof value === 'string'
+        ? ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
+        : value, zod_1.z.boolean().default(false)),
+    GOOGLE_CLOUD_TRANSLATION_MONTHLY_CHARACTER_LIMIT: zod_1.z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(490000)
+        .default(490000),
     FILE_STORAGE_PATH: zod_1.z.string().default('storage'),
     MAX_UPLOAD_SIZE_MB: zod_1.z.coerce
         .number()

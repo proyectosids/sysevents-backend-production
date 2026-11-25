@@ -16,6 +16,7 @@ const cms_repository_1 = require("../../cms/infrastructure/repositories/cms.repo
 const events_repository_1 = require("../../events/infrastructure/repositories/events.repository");
 const authenticate_middleware_1 = require("../../iam/presentation/middlewares/authenticate.middleware");
 const require_permission_middleware_1 = require("../../iam/presentation/middlewares/require-permission.middleware");
+const translation_cache_service_1 = require("../../translations/services/translation-cache.service");
 const template_importer_service_1 = require("../application/services/template-importer.service");
 const template_preview_service_1 = require("../application/services/template-preview.service");
 const site_studio_repository_1 = require("../infrastructure/repositories/site-studio.repository");
@@ -26,6 +27,7 @@ const siteRepository = new site_studio_repository_1.SiteStudioRepository();
 const eventsRepository = new events_repository_1.EventsRepository();
 const cmsRepository = new cms_repository_1.CmsRepository();
 const templateImporter = new template_importer_service_1.TemplateImporterService();
+const translationService = new translation_cache_service_1.TranslationCacheService();
 const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: 250 * 1024 * 1024 } });
 function getTemplateSections(template) {
     if (!template || typeof template !== 'object') {
@@ -408,9 +410,11 @@ exports.siteStudioRouter.post('/events/:eventId/site/plugins/:pluginId/install',
 exports.siteStudioRouter.post('/events/:eventId/site/publish', (0, require_permission_middleware_1.requirePermission)('site_studio.manage'), (0, async_handler_1.asyncHandler)(async (req, res) => {
     const { eventId } = site_studio_schemas_1.siteEventParamsSchema.parse(req.params);
     const event = await ensureEvent(eventId);
-    const [pages, sections] = await Promise.all([
+    const [pages, sections, settings, navigation] = await Promise.all([
         cmsRepository.listPages(eventId),
         cmsRepository.listSections(eventId),
+        siteRepository.getSettings(eventId),
+        siteRepository.listNavigation(eventId),
     ]);
     await siteRepository.snapshot(eventId, 'published', req.user.id);
     await Promise.all([
@@ -419,6 +423,13 @@ exports.siteStudioRouter.post('/events/:eventId/site/publish', (0, require_permi
         siteRepository.updateSettings(eventId, { status: 'published' }),
         event.status !== 'published' ? eventsRepository.publishEvent(eventId, req.user.id) : Promise.resolve(event),
     ]);
+    translationService.queueEventPretranslation(eventId, {
+        event: { name: event.name },
+        settings,
+        pages,
+        sections,
+        navigation,
+    }, ['en', 'fr']);
     return (0, api_response_1.sendSuccess)(res, 'Site published successfully');
 }));
 exports.publicSiteStudioRouter.get('/events/:slug/site', (0, async_handler_1.asyncHandler)(async (req, res) => {

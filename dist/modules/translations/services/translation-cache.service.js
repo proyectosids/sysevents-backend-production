@@ -3,26 +3,38 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TranslationCacheService = void 0;
-exports.translateWithGoogle = translateWithGoogle;
+exports.TranslationCacheService = exports.GoogleCloudTranslationProvider = void 0;
 exports.translateGroupWithGoogle = translateGroupWithGoogle;
+exports.translateWithGoogle = translateWithGoogle;
+exports.collectTranslatableStrings = collectTranslatableStrings;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const env_1 = require("../../../config/env");
 const logger_1 = require("../../../shared/logger/logger");
+const event_translation_repository_1 = require("../infrastructure/repositories/event-translation.repository");
+const translation_usage_repository_1 = require("../infrastructure/repositories/translation-usage.repository");
 const TRANSLATION_CACHE_DIR = path_1.default.resolve(env_1.env.FILE_STORAGE_PATH, 'i18n-cache');
-const GOOGLE_TRANSLATION_ENDPOINTS = [
-    'https://translate.googleapis.com/translate_a/single',
-    'https://translate.google.com/translate_a/single',
-];
+const GOOGLE_CLOUD_TRANSLATION_ENDPOINT = 'https://translation.googleapis.com/language/translate/v2';
 function normalizeText(value) {
     return value.replace(/\s+/g, ' ').trim();
+}
+function decodeBasicHtml(value) {
+    const named = {
+        amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", nbsp: ' ',
+    };
+    return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code) => {
+        if (code.startsWith('#x'))
+            return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
+        if (code.startsWith('#'))
+            return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
+        return named[code.toLowerCase()] ?? entity;
+    });
 }
 function isProtectedValue(value) {
     const text = normalizeText(value);
     if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(text))
         return true;
-    if (/https?:\/\/|www\./i.test(text))
+    if (/^(?:https?:\/\/|www\.)/i.test(text))
         return true;
     if (/\b[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\b/i.test(text))
         return true;
@@ -32,11 +44,15 @@ function isProtectedValue(value) {
         return true;
     if (/^\+?\d[\d\s().-]{6,}$/.test(text))
         return true;
+    if (/^#[0-9a-f]{3,8}$/i.test(text))
+        return true;
+    if (/^[\w./\\-]+\.(?:html?|css|js|json|png|jpe?g|webp|svg|pdf|docx?|pptx?|xlsx?)$/i.test(text))
+        return true;
     return false;
 }
 function isTranslatableText(value) {
     const normalized = normalizeText(value);
-    if (normalized.length < 2)
+    if (normalized.length < 2 || normalized.length > 10_000)
         return false;
     if (isProtectedValue(normalized))
         return false;
@@ -44,13 +60,14 @@ function isTranslatableText(value) {
         return false;
     return /\p{L}/u.test(normalized);
 }
+function uniqueTranslatableTexts(texts) {
+    return [...new Set(texts.map(normalizeText).filter(isTranslatableText))];
+}
 async function readJson(filePath) {
     try {
         return JSON.parse(await fs_1.promises.readFile(filePath, 'utf8'));
     }
     catch {
-        // The cache is an optimization. A missing, truncated or temporarily
-        // unavailable file must never disable translation for the public site.
         return {};
     }
 }
@@ -65,191 +82,253 @@ async function writeJson(filePath, data) {
         await fs_1.promises.rm(temporaryPath, { force: true }).catch(() => undefined);
     }
 }
-async function translateWithGoogle(text, targetLanguage) {
-    const params = new URLSearchParams({
-        client: 'gtx',
-        sl: 'es',
-        tl: targetLanguage,
-        dt: 't',
-        q: text,
+async function translateGroupWithGoogle(texts, targetLanguage, apiKey = env_1.env.GOOGLE_CLOUD_TRANSLATION_API_KEY) {
+    if (!apiKey)
+        throw new Error('GOOGLE_CLOUD_TRANSLATION_API_KEY is not configured');
+    if (!texts.length)
+        return new Map();
+    const endpoint = `${GOOGLE_CLOUD_TRANSLATION_ENDPOINT}?key=${encodeURIComponent(apiKey)}`;
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        signal: AbortSignal.timeout(15_000),
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({ q: texts, source: 'es', target: targetLanguage, format: 'html' }),
     });
-    let lastError;
-    for (const endpoint of GOOGLE_TRANSLATION_ENDPOINTS) {
-        try {
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                body: params,
-                signal: AbortSignal.timeout(5_000),
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                    'User-Agent': 'Mozilla/5.0 (compatible; SysEvents/1.0; +https://eventos.ulv.edu.mx)',
-                },
-            });
-            if (!response.ok) {
-                throw new Error(`Translation provider returned ${response.status}`);
-            }
-            const payload = await response.json();
-            const translated = payload[0]?.map((segment) => segment[0]).join('').trim();
-            if (!translated)
-                throw new Error('Translation provider returned an empty response');
-            return translated;
-        }
-        catch (error) {
-            lastError = error;
-        }
+    if (!response.ok)
+        throw new Error(`Google Cloud Translation returned ${response.status}`);
+    const payload = await response.json();
+    const translatedItems = payload.data?.translations ?? [];
+    if (translatedItems.length !== texts.length) {
+        throw new Error('Google Cloud Translation returned an incomplete response');
     }
-    throw lastError instanceof Error ? lastError : new Error('Translation provider unavailable');
+    return texts.reduce((translations, source, index) => {
+        const translated = normalizeText(decodeBasicHtml(translatedItems[index]?.translatedText ?? ''));
+        if (translated)
+            translations.set(source, translated);
+        return translations;
+    }, new Map());
 }
-function escapeHtml(value) {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+async function translateWithGoogle(text, targetLanguage, apiKey = env_1.env.GOOGLE_CLOUD_TRANSLATION_API_KEY) {
+    const translations = await translateGroupWithGoogle([text], targetLanguage, apiKey);
+    const translated = translations.get(text);
+    if (!translated)
+        throw new Error('Google Cloud Translation returned an empty response');
+    return translated;
 }
-function decodeHtml(value) {
-    const named = {
-        amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'",
-    };
-    return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code) => {
-        if (code.startsWith('#x'))
-            return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
-        if (code.startsWith('#'))
-            return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
-        return named[code.toLowerCase()] ?? entity;
-    });
-}
-async function translateGroupWithGoogle(texts, targetLanguage) {
-    const markup = texts
-        .map((text, index) => `<span data-sysevents-id="${index}">${escapeHtml(text)}</span>`)
-        .join('');
-    const translatedMarkup = await translateWithGoogle(markup, targetLanguage);
-    const translations = new Map();
-    const pattern = /<span\s+data-sysevents-id=["'](\d+)["']>([\s\S]*?)<\/span>/gi;
-    let match = pattern.exec(translatedMarkup);
-    while (match) {
-        const index = Number(match[1]);
-        if (texts[index] !== undefined)
-            translations.set(texts[index], decodeHtml(match[2]).trim());
-        match = pattern.exec(translatedMarkup);
-    }
-    if (translations.size !== texts.length)
-        throw new Error('Translation provider changed batch markers');
-    return translations;
-}
-function groupByCharacterLimit(texts, characterLimit = 4_000) {
+function groupByLimits(texts, characterLimit = 20_000, itemLimit = 100) {
     const groups = [];
     let current = [];
     let currentLength = 0;
     texts.forEach((text) => {
-        const estimatedLength = text.length + 48;
-        if (current.length && currentLength + estimatedLength > characterLimit) {
+        if (current.length && (current.length >= itemLimit || currentLength + text.length > characterLimit)) {
             groups.push(current);
             current = [];
             currentLength = 0;
         }
         current.push(text);
-        currentLength += estimatedLength;
+        currentLength += text.length;
     });
     if (current.length)
         groups.push(current);
     return groups;
 }
-async function translateGroupResilient(texts, targetLanguage) {
-    try {
-        return await translateGroupWithGoogle(texts, targetLanguage);
+function currentUsageMonth() {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+    }).formatToParts(new Date());
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    return `${year}-${month}`;
+}
+class GoogleCloudTranslationProvider {
+    usageRepository;
+    options;
+    constructor(usageRepository = new translation_usage_repository_1.TranslationUsageRepository(), options = {
+        enabled: env_1.env.GOOGLE_CLOUD_TRANSLATION_ENABLED,
+        apiKey: env_1.env.GOOGLE_CLOUD_TRANSLATION_API_KEY,
+        monthlyCharacterLimit: env_1.env.GOOGLE_CLOUD_TRANSLATION_MONTHLY_CHARACTER_LIMIT,
+    }) {
+        this.usageRepository = usageRepository;
+        this.options = options;
     }
-    catch (error) {
-        logger_1.logger.warn('Translation group could not be resolved', {
-            targetLanguage,
-            textCount: texts.length,
-            characterCount: texts.reduce((total, text) => total + text.length, 0),
-            error: error instanceof Error ? error.message : String(error),
-        });
-        return new Map();
+    async translateMany(texts, targetLanguage) {
+        const translations = {};
+        if (!this.options.enabled)
+            return translations;
+        if (!this.options.apiKey)
+            throw new Error('GOOGLE_CLOUD_TRANSLATION_API_KEY is not configured');
+        for (const group of groupByLimits(texts)) {
+            const usageMonth = currentUsageMonth();
+            const characterCount = group.reduce((total, text) => total + text.length, 0);
+            const reserved = await this.usageRepository.reserveCharacters(usageMonth, characterCount, this.options.monthlyCharacterLimit);
+            if (!reserved) {
+                logger_1.logger.warn('Monthly Google translation character limit reached', {
+                    usageMonth,
+                    monthlyCharacterLimit: this.options.monthlyCharacterLimit,
+                    rejectedCharacters: characterCount,
+                });
+                break;
+            }
+            try {
+                const resolved = await translateGroupWithGoogle(group, targetLanguage, this.options.apiKey);
+                resolved.forEach((translated, source) => {
+                    if (normalizeText(translated) !== source)
+                        translations[source] = translated;
+                });
+            }
+            catch (error) {
+                await this.usageRepository.releaseCharacters(usageMonth, characterCount).catch(() => undefined);
+                throw error;
+            }
+        }
+        return translations;
     }
 }
-async function translateConcurrently(texts, targetLanguage, concurrency = 4) {
-    const translations = new Map();
-    const groups = groupByCharacterLimit(texts);
-    let nextIndex = 0;
-    const workers = Array.from({ length: Math.min(concurrency, groups.length) }, async () => {
-        while (nextIndex < groups.length) {
-            const group = groups[nextIndex++];
-            const resolved = await translateGroupResilient(group, targetLanguage);
-            resolved.forEach((translated, text) => translations.set(text, translated));
+exports.GoogleCloudTranslationProvider = GoogleCloudTranslationProvider;
+function collectTranslatableStrings(value) {
+    const collected = [];
+    const technicalKey = /^(?:id|eventId|pageId|sectionId|fileId|.*FileId|.*Url|url|href|src|slug|status|target|objectType|sectionType|type|variant|align|position|className|sourceFile|sourceThemeKey|sourceThemeId|color|.*Color|fontFamily|fontWeight)$/i;
+    const visit = (candidate, key = '') => {
+        if (technicalKey.test(key))
+            return;
+        if (typeof candidate === 'string') {
+            const fragments = /<[^>]+>/.test(candidate)
+                ? decodeBasicHtml(candidate
+                    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                    .replace(/<[^>]+>/g, '\n')).split(/\r?\n/)
+                : [candidate];
+            fragments.forEach((fragment) => {
+                const normalized = normalizeText(fragment);
+                if (isTranslatableText(normalized))
+                    collected.push(normalized);
+            });
+            return;
         }
-    });
-    await Promise.all(workers);
-    return translations;
+        if (Array.isArray(candidate)) {
+            candidate.forEach((item) => visit(item, key));
+            return;
+        }
+        if (candidate && typeof candidate === 'object') {
+            Object.entries(candidate).forEach(([childKey, child]) => visit(child, childKey));
+        }
+    };
+    visit(value);
+    return [...new Set(collected)];
 }
 class TranslationCacheService {
+    repository;
+    provider;
     languageQueues = new Map();
-    async translateMany(texts, targetLanguage) {
-        const previous = this.languageQueues.get(targetLanguage) ?? Promise.resolve();
+    constructor(repository = new event_translation_repository_1.EventTranslationRepository(), provider = new GoogleCloudTranslationProvider()) {
+        this.repository = repository;
+        this.provider = provider;
+    }
+    async translateMany(texts, targetLanguage, eventId) {
+        const queueKey = `${eventId ?? 'global'}:${targetLanguage}`;
+        const previous = this.languageQueues.get(queueKey) ?? Promise.resolve();
         let releaseQueue;
-        const current = new Promise((resolve) => {
-            releaseQueue = resolve;
-        });
+        const current = new Promise((resolve) => { releaseQueue = resolve; });
         const queued = previous.then(() => current);
-        this.languageQueues.set(targetLanguage, queued);
+        this.languageQueues.set(queueKey, queued);
         await previous;
         try {
-            return await this.translateManyExclusive(texts, targetLanguage);
+            return await this.translateManyExclusive(texts, targetLanguage, eventId);
         }
         finally {
             releaseQueue();
-            if (this.languageQueues.get(targetLanguage) === queued) {
-                this.languageQueues.delete(targetLanguage);
-            }
+            if (this.languageQueues.get(queueKey) === queued)
+                this.languageQueues.delete(queueKey);
         }
     }
-    async translateManyExclusive(texts, targetLanguage) {
+    async translateManyExclusive(texts, targetLanguage, eventId) {
+        const uniqueTexts = uniqueTranslatableTexts(texts);
         const filePath = path_1.default.join(TRANSLATION_CACHE_DIR, `${targetLanguage}.json`);
-        const cache = await readJson(filePath);
-        const uniqueTexts = [...new Set(texts.map(normalizeText).filter(isTranslatableText))];
-        let changed = false;
-        const missingTexts = uniqueTexts.filter((text) => !cache[text] || normalizeText(cache[text]) === text);
-        if (missingTexts.length) {
-            const translations = await translateConcurrently(missingTexts, targetLanguage);
-            translations.forEach((translated, text) => {
-                // Do not poison the target-language cache with the Spanish source when
-                // the upstream provider gives no effective translation.
-                if (normalizeText(translated) !== text) {
-                    if (cache[text] !== translated)
-                        changed = true;
-                    cache[text] = translated;
-                }
-                else if (cache[text]) {
-                    delete cache[text];
-                    changed = true;
-                }
-            });
+        const fileCache = await readJson(filePath);
+        let persistentCache = {};
+        if (eventId) {
+            try {
+                persistentCache = await this.repository.findMany(eventId, targetLanguage);
+            }
+            catch (error) {
+                logger_1.logger.warn('Persistent translation cache is unavailable', {
+                    eventId,
+                    targetLanguage,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
         }
-        if (changed) {
-            // A read-only or temporarily unavailable volume must not turn a valid
-            // provider response into a 500. Translation still succeeds without cache.
-            await writeJson(filePath, cache).catch(() => undefined);
+        const cache = { ...fileCache, ...persistentCache };
+        const fileBackfill = uniqueTexts.reduce((result, text) => {
+            if (!persistentCache[text] && fileCache[text] && normalizeText(fileCache[text]) !== text) {
+                result[text] = fileCache[text];
+            }
+            return result;
+        }, {});
+        const missingTexts = uniqueTexts.filter((text) => !cache[text] || normalizeText(cache[text]) === text);
+        let generated = {};
+        if (missingTexts.length) {
+            try {
+                generated = await this.provider.translateMany(missingTexts, targetLanguage);
+            }
+            catch (error) {
+                logger_1.logger.warn('Official translation provider could not resolve content', {
+                    eventId,
+                    targetLanguage,
+                    textCount: missingTexts.length,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+        Object.assign(cache, generated);
+        if (Object.keys(generated).length) {
+            await writeJson(filePath, { ...fileCache, ...generated }).catch(() => undefined);
+            if (eventId) {
+                await this.repository.upsertMany(eventId, targetLanguage, { ...fileBackfill, ...generated }).catch((error) => {
+                    logger_1.logger.warn('Generated translations could not be persisted in SQL', {
+                        eventId,
+                        targetLanguage,
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                });
+            }
+        }
+        else if (eventId && Object.keys(fileBackfill).length) {
+            await this.repository.upsertMany(eventId, targetLanguage, fileBackfill).catch(() => undefined);
         }
         return uniqueTexts.reduce((result, text) => {
             result[text] = cache[text] ?? text;
             return result;
         }, {});
     }
-    async restoreMany(texts, sourceLanguage) {
+    async restoreMany(texts, sourceLanguage, eventId) {
         const filePath = path_1.default.join(TRANSLATION_CACHE_DIR, `${sourceLanguage}.json`);
-        const cache = await readJson(filePath);
-        const inverted = Object.entries(cache).reduce((result, [spanish, translated]) => {
+        const fileCache = await readJson(filePath);
+        let persistentCache = {};
+        if (eventId)
+            persistentCache = await this.repository.findMany(eventId, sourceLanguage).catch(() => ({}));
+        const inverted = Object.entries({ ...fileCache, ...persistentCache }).reduce((result, [spanish, translated]) => {
             result[normalizeText(translated)] = spanish;
             return result;
         }, {});
-        const uniqueTexts = [...new Set(texts.map(normalizeText).filter(isTranslatableText))];
-        return uniqueTexts.reduce((result, text) => {
+        return uniqueTranslatableTexts(texts).reduce((result, text) => {
             if (inverted[text])
                 result[text] = inverted[text];
             return result;
         }, {});
+    }
+    queueEventPretranslation(eventId, content, targetLanguages = ['en', 'fr']) {
+        const texts = collectTranslatableStrings(content);
+        if (!texts.length)
+            return;
+        void Promise.all(targetLanguages.map((language) => this.translateMany(texts, language, eventId)))
+            .then(() => logger_1.logger.info('Event translations prepared', { eventId, textCount: texts.length, targetLanguages }))
+            .catch((error) => logger_1.logger.warn('Event translation preparation did not complete', {
+            eventId,
+            error: error instanceof Error ? error.message : String(error),
+        }));
     }
 }
 exports.TranslationCacheService = TranslationCacheService;

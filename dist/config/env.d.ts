@@ -16,6 +16,8 @@ export declare const env: {
     DB_NAME: string;
     DB_ENCRYPT: boolean;
     DB_TRUST_SERVER_CERTIFICATE: boolean;
+    GOOGLE_CLOUD_TRANSLATION_ENABLED: boolean;
+    GOOGLE_CLOUD_TRANSLATION_MONTHLY_CHARACTER_LIMIT: number;
     FILE_STORAGE_PATH: string;
     MAX_UPLOAD_SIZE_MB: number;
     ALLOWED_UPLOAD_MIME_TYPES: string;
@@ -27,6 +29,7 @@ export declare const env: {
     STRIPE_SECRET_KEY?: string | undefined;
     STRIPE_WEBHOOK_SECRET?: string | undefined;
     MERCADOPAGO_ACCESS_TOKEN?: string | undefined;
+    GOOGLE_CLOUD_TRANSLATION_API_KEY?: string | undefined;
     SMTP_HOST?: string | undefined;
     SMTP_USER?: string | undefined;
     SMTP_PASSWORD?: string | undefined;
